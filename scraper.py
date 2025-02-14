@@ -1,126 +1,231 @@
 import time
 import random
-import json
+import csv
 import traceback
+from datetime import datetime
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver import ActionChains
 
-# Ajusta la ruta a tu ChromeDriver
-CHROMEDRIVER_PATH = "/opt/homebrew/bin/chromedriver"
+# =========================================================================
+# CONFIGURACIÓN GENERAL
+# =========================================================================
 
-INSTAGRAM_USERNAME = "redzone_rr"
-INSTAGRAM_PASSWORD = "provisional2628"
+# Credenciales de Instagram *incrustadas* directamente
+INSTA_USER = "redzone_rr"
+INSTA_PASS = "provisional2628"
 
-def setup_driver():
-    chrome_options = Options()
-    # Modo no-headless para depurar y ver la ventana
-    # (Si quieres headless, descomenta la línea de abajo)
-    # chrome_options.add_argument("--headless")
+# Lista de cuentas a extraer
+ACCOUNTS = [
+    "disneystudiosla", "paramountmexico", "videocine",
+    "sonypicturesmx", "diamondfilmsmex", "universalmx",
+    "warnerbrosmx", "corazonfilms"
+]
 
-    # User-Agent normal
-    user_agent = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
-    )
-    chrome_options.add_argument(f"--user-agent={user_agent}")
+# Año mínimo a filtrar
+YEAR_FILTER = 2024
 
-    # Desactivar algunas huellas de automatización
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
+# =========================================================================
+# CLASE SCRAPER
+# =========================================================================
+class InstagramScraper:
+    def __init__(self):
+        self.driver = self._setup_driver()
+        self.action = ActionChains(self.driver)
 
-    service = Service(CHROMEDRIVER_PATH)
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    driver.set_page_load_timeout(60)
-    return driver
+    def _setup_driver(self):
+        """
+        Configura Selenium con el proxy residencial de Bright Data.
+        """
+        PROXY_HOST = "brd.superproxy.io"
+        PROXY_PORT = "33335"
+        PROXY_USER = "brd-customer-hl_5c6b7303-zone-residential_proxy1"
+        PROXY_PASS = "c6y6ev5szcrn"
 
-def instagram_forced_login(driver, username, password):
-    """Abre Instagram en la URL de login y fuerza el inicio de sesión."""
-    try:
-        driver.get("https://www.instagram.com/accounts/login/")
-        time.sleep(3)  # Damos un pequeño respiro para que cargue
-        
-        # Aceptar cookies (si aparece el banner).
-        # El texto exacto depende del idioma. Ajusta si hace falta.
+        # Configuración de Proxy en Chrome
+        options = webdriver.ChromeOptions()
+        proxy_argument = f"--proxy-server=http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+        options.add_argument(proxy_argument)
+
+        # Opciones anti detección Selenium
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument(f"--user-agent={self._random_user_agent()}")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+
+        # Iniciar WebDriver con las opciones configuradas
+        driver = webdriver.Chrome(options=options)
+        driver.set_page_load_timeout(60)
+        driver.implicitly_wait(10)
+        return driver
+
+    def _random_user_agent(self):
+        """
+        Devuelve un User-Agent aleatorio para evitar detección.
+        """
+        agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2_1 like Mac OS X)"
+            " AppleWebKit/605.1.15 (KHTML, like Gecko)"
+            " Version/15.2 Mobile/15E148 Safari/604.1",
+        ]
+        return random.choice(agents)
+
+    def _human_delay(self, min_s=1.0, max_s=3.0):
+        """
+        Pausa aleatoria entre acciones para simular comportamiento humano.
+        """
+        base = random.uniform(min_s, max_s)
+        gauss_factor = random.gauss(0, 0.3)
+        total = max(0, base + gauss_factor)
+        time.sleep(total)
+
+    def login(self):
+        """
+        Inicia sesión en Instagram con las credenciales.
+        """
+        self.driver.get("https://www.instagram.com/")
+        self._human_delay(3, 5)
+
         try:
-            accept_cookies = driver.find_element(By.XPATH, "//button[contains(text(), 'Aceptar todas las cookies')]")
-            accept_cookies.click()
-            time.sleep(2)
-            print("[INFO] Cookies aceptadas.")
+            # Aceptar cookies
+            allow_btn = self.driver.find_element(By.XPATH, "//button[contains(., 'Permitir')]")
+            allow_btn.click()
+            self._human_delay(1, 2)
         except:
             pass
 
-        # Espera a que aparezca el campo "username"
-        WebDriverWait(driver, 15).until(
-            EC.presence_of_element_located((By.NAME, "username"))
-        )
-
-        # Rellena el usuario
-        user_input = driver.find_element(By.NAME, "username")
-        user_input.clear()
-        user_input.send_keys(username)
-
-        # Rellena la contraseña
-        pass_input = driver.find_element(By.NAME, "password")
-        pass_input.clear()
-        pass_input.send_keys(password)
-
-        # Clic en "submit"
-        login_button = driver.find_element(By.XPATH, "//button[@type='submit']")
-        login_button.click()
-        print("[INFO] Credenciales enviadas, esperando la respuesta...")
-
-        # Esperamos a que desaparezca el campo "username" => login exitoso
-        # o en su defecto, aparezca otro elemento que indique que ya cargó la home.
         try:
-            WebDriverWait(driver, 15).until_not(
-                EC.presence_of_element_located((By.NAME, "username"))
-            )
-            print("[INFO] Login completado (desapareció el campo username).")
-        except:
-            # Si sigue ahí, tal vez hay un error de credenciales o un checkpoint
-            print("[WARNING] Es posible que no se haya completado el login.")
-        
-        # (Opcional) Imprime la URL actual y parte del contenido para inspeccionar
-        print("[DEBUG] URL tras login:", driver.current_url)
-        page_source = driver.page_source[:1000]  # solo 1000 chars para no saturar
-        print("[DEBUG] Parte del page_source:\n", page_source)
+            username_input = self.driver.find_element(By.NAME, "username")
+            password_input = self.driver.find_element(By.NAME, "password")
+
+            # Escribir usuario y contraseña
+            username_input.send_keys(INSTA_USER)
+            self._human_delay(0.5, 1.0)
+            password_input.send_keys(INSTA_PASS)
+
+            # Click en "Iniciar sesión"
+            login_btn = self.driver.find_element(By.XPATH, "//button[@type='submit']")
+            login_btn.click()
+
+            self._human_delay(5, 8)
+
+            if "login" in self.driver.current_url:
+                raise Exception("Error de autenticación (quizás 2FA o captcha).")
+            else:
+                print("[INFO] Login completado.")
+        except Exception as e:
+            print("[ERROR] en login:", e)
+            traceback.print_exc()
+
+    def scrape_profile(self, username):
+        """
+        Extrae posts del perfil de Instagram especificado.
+        """
+        self.driver.get(f"https://www.instagram.com/{username}/")
+        self._human_delay(3, 5)
+
+        all_posts = []
+        last_date = datetime.now()
+
+        while last_date.year >= YEAR_FILTER:
+            self._scroll_human()
+            new_posts = self._extract_posts()
+            if not new_posts:
+                break
+
+            for post in new_posts:
+                post_date = datetime.strptime(post['date'], "%Y-%m-%dT%H:%M:%S")
+                if post_date.year < YEAR_FILTER:
+                    return all_posts
+                all_posts.append(post)
+
+            last_date = datetime.strptime(new_posts[-1]['date'], "%Y-%m-%dT%H:%M:%S")
+
+        return all_posts
+
+    def _scroll_human(self):
+        """
+        Simula scroll humano en la página de perfil.
+        """
+        body = self.driver.find_element(By.TAG_NAME, "body")
+        for _ in range(random.randint(3, 6)):
+            body.send_keys(Keys.PAGE_DOWN)
+            self._human_delay(1.5, 3.0)
+
+    def _extract_posts(self):
+        """
+        Extrae los datos de los posts visibles.
+        """
+        posts_data = []
+        articles = self.driver.find_elements(By.TAG_NAME, "article")
+        if not articles:
+            return posts_data
+
+        for article in articles[-6:]:
+            try:
+                time_element = article.find_element(By.TAG_NAME, "time")
+                date_str = time_element.get_attribute("datetime")
+                link_elem = article.find_element(By.TAG_NAME, "a")
+                post_url = link_elem.get_attribute("href")
+
+                posts_data.append({
+                    "date": date_str,
+                    "url": post_url
+                })
+            except Exception as e:
+                print("[ERROR] extrayendo post:", e)
+                continue
+
+        return posts_data
+
+    def save_to_csv(self, data, filename):
+        """
+        Guarda los datos extraídos en un archivo CSV.
+        """
+        if not data:
+            print("No hay datos para guardar en CSV.")
+            return
+        keys = data[0].keys()
+        with open(filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=keys)
+            writer.writeheader()
+            writer.writerows(data)
+        print(f"[INFO] Se guardaron {len(data)} filas en {filename}.")
+
+# =========================================================================
+# MAIN
+# =========================================================================
+if __name__ == "__main__":
+    scraper = InstagramScraper()
+    try:
+        # 1) Login
+        scraper.login()
+
+        # 2) Recorrer cuentas
+        all_posts = []
+        for account in ACCOUNTS:
+            print(f"\n[INFO] Scrapeando {account}")
+            posts = scraper.scrape_profile(account)
+            all_posts.extend(posts)
+            print(f"[INFO] {account} => {len(posts)} posts extraídos")
+            time.sleep(random.randint(5, 15))
+
+        # 3) Guardar en CSV
+        scraper.save_to_csv(all_posts, "instagram_posts_2024.csv")
+        print("\n[OK] Proceso completado.")
 
     except Exception as e:
-        print("[ERROR] en instagram_forced_login:", e)
+        print("[CRÍTICO] Error en la ejecución:", e)
         traceback.print_exc()
-
-def main():
-    driver = setup_driver()
-    try:
-        instagram_forced_login(driver, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-        # Espera unos segundos para observar
-        time.sleep(5)
-
-        # Revisa si realmente estás logueado.
-        # Por ejemplo, intenta abrir la home "instagram.com" y ver si te muestra feed.
-        driver.get("https://www.instagram.com/")
-        time.sleep(5)
-        print("[INFO] URL tras home:", driver.current_url)
-
-        # Imprime parte del contenido
-        print("[INFO] page_source de home:\n", driver.page_source[:1000])
-
-        # Aquí podrías continuar con tu scraping si estás logueado
-        # ...
-        
     finally:
-        driver.quit()
-        print("[INFO] Finalizado.")
+        scraper.driver.quit()
+        print("[INFO] Selenium cerrado.")
 
-if __name__ == "__main__":
-    main()
+
+
 
 
 
