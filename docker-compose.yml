@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: scraper_backend
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+    # Si necesitas exponer puertos, descomenta y ajusta la siguiente línea:
+    # ports:
+    #   - "8000:8000"
