@@ -2,9 +2,12 @@ import time
 import random
 import csv
 import traceback
+import pandas as pd
 from fake_useragent import UserAgent
 from datetime import datetime
 import undetected_chromedriver as uc
+
+from agents import agents
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
@@ -28,7 +31,7 @@ ACCOUNTS = [
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
-MAX_POSTS = 20  # Número máximo de posts a extraer
+MAX_POSTS = 300  # Número máximo de posts a extraer
 
 # =========================================================================
 # CLASE SCRAPER
@@ -79,61 +82,8 @@ class InstagramScraper:
         """
         Devuelve un User-Agent aleatorio para evitar detección.
         """
-        # ua = UserAgent()
-        # random_user_agent = ua.random
-        agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            " (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2_1 like Mac OS X)"
-            " AppleWebKit/605.1.15 (KHTML, like Gecko)"
-            " Version/15.2 Mobile/15E148 Safari/604.1",
-
-    # Navegadores Chrome en Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
-
-    # Navegadores Chrome en macOS
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
-
-    # Navegadores Firefox en Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/109.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/108.0",
-
-    # Navegadores Firefox en macOS
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/110.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/109.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/108.0",
-
-    # Navegadores Safari en macOS
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Safari/605.1.15",
-
-    # Navegadores Chrome en Android
-    "Mozilla/5.0 (Linux; Android 12; SM-S901U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 12; SM-S901U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 12; SM-S901U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Mobile Safari/537.36",
-
-    # Navegadores Safari en iPhone
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-
-    # Navegadores Edge en Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.46",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.55",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Edg/108.0.1462.46",
-
-    # Navegadores Opera en Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 OPR/96.0.0.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 OPR/95.0.0.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 OPR/94.0.0.0",
-
-        ]
+        return random.choice(agents)
+        
 
 
     def _human_delay(self, min_s=1.0, max_s=3.0):
@@ -183,32 +133,8 @@ class InstagramScraper:
             print("[ERROR] en login:", e)
             traceback.print_exc()
 
-    def scrape_profile(self, username):
-        """
-        Extrae posts del perfil de Instagram especificado.
-        """
-        self.driver.get(f"https://www.instagram.com/{username}/")
-        self._human_delay(3, 5)
 
-        all_posts = []
-        last_date = datetime.now()
-
-        while last_date.year >= YEAR_FILTER:
-            self._scroll_human()
-            new_posts = self._extract_posts()
-            if not new_posts:
-                break
-
-            for post in new_posts:
-                post_date = datetime.strptime(post['date'], "%Y-%m-%dT%H:%M:%S")
-                if post_date.year < YEAR_FILTER:
-                    return all_posts
-                all_posts.append(post)
-
-            last_date = datetime.strptime(new_posts[-1]['date'], "%Y-%m-%dT%H:%M:%S")
-
-        return all_posts
-
+    
     def _scroll_human(self):
         """
         Simula scroll humano en la página de perfil.
@@ -218,44 +144,202 @@ class InstagramScraper:
             body.send_keys(Keys.PAGE_DOWN)
             self._human_delay(1.5, 3.0)
 
-    def _extract_posts(self):
-        """
-        Extrae los datos de los posts visibles.
-        """
+#===========================================================================
+
+#SUPPORT
+
+#===========================================================================
+    def scrape_profile(self, username):
+        """Extrae posts del perfil de Instagram especificado."""
+        print(f"\n🔍 [INFO] Abriendo perfil de {username}...")
+        self.driver.get(f"https://www.instagram.com/{username}/")
+        self._human_delay(3, 5)
+        self._human_delay(2, 4)
+
+        # Intentar abrir el primer post
+        if not self._open_first_post():
+            print(f"⚠️ [WARNING] No se pudo abrir el primer post de {username}. Saliendo...")
+            return []
+
+        self._human_delay(3, 5)
+
         posts_data = []
-        articles = self.driver.find_elements(By.TAG_NAME, "article")
-        if not articles:
-            return posts_data
-
-        for article in articles[-6:]:
+        for i in range(MAX_POSTS):
             try:
-                time_element = article.find_element(By.TAG_NAME, "time")
-                date_str = time_element.get_attribute("datetime")
-                link_elem = article.find_element(By.TAG_NAME, "a")
-                post_url = link_elem.get_attribute("href")
+                print(f"\n📸 [INFO] Extrayendo post {i+1}/{MAX_POSTS}")
+                post_data = self._extract_post_data()
 
-                posts_data.append({
-                    "date": date_str,
-                    "url": post_url
-                })
+                if post_data:
+                    posts_data.append(post_data)
+                else:
+                    print(f"⚠️ [WARNING] No se pudo extraer datos del post {i+1}. Intentando siguiente...")
+
+                # Intentar ir al siguiente post
+                if not self._click_next_post():
+                    print("⚠️ [INFO] No hay más posts disponibles o no se pudo hacer clic en 'Next'. Terminando extracción.")
+                    break  # Salimos del loop si no hay más posts
+
             except Exception as e:
-                print("[ERROR] extrayendo post:", e)
-                continue
+                print(f"❌ [ERROR] Ocurrió un problema con el post {i+1}: {e}")
+                traceback.print_exc()  # Muestra el error completo para depuración
 
+        print(f"\n✅ [INFO] Extracción completada: {len(posts_data)} posts obtenidos de {username}.")
         return posts_data
 
+
+    def _open_first_post(self):
+        """Abre el primer post en el perfil, asegurando que pertenece a la cuenta deseada."""
+        self._human_delay(2, 4)
+        try:
+            # Esperar a que el primer post con href="/universalmx/..." sea clickeable
+            first_post = WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//div[contains(@style, 'display: flex; flex-direction: column;')]//a[starts-with(@href, '/universalmx/')][1]")
+                )
+            )
+
+            # Hacer clic en el post
+            self.driver.execute_script("arguments[0].click();", first_post)
+            self._human_delay(2, 4)
+            print("✅ Primer post abierto con éxito.")
+            return True
+
+        except Exception as e:
+            print("[ERROR] No se pudo abrir el primer post:", e)
+            self.driver.save_screenshot("error_screenshot.png")  # Guardar una captura de pantalla
+            print("[INFO] Captura de pantalla guardada como error_screenshot.png")
+            return False
+
+
+
+    def _extract_post_data(self):
+        """Extrae datos del post abierto en el modal."""
+
+        try:
+            post_url = self.driver.current_url
+
+            # Extraer número de likes
+            try:
+                likes_element = self.driver.find_element(By.XPATH, "//a[contains(@href, 'liked_by')]/span/span")
+                likes = likes_element.text.replace(",", "").strip()  # Eliminar comas y espacios
+            except:
+                likes = "No disponible"
+
+            # Extraer fecha del post
+            try:
+                date_element = self.driver.find_element(By.TAG_NAME, "time")
+                post_date = date_element.get_attribute("datetime")
+            except:
+                post_date = "No disponible"
+
+            # Extraer comentarios
+            comments = self._extract_comments()
+
+            print(f"✅ Post extraído: {post_url} | Likes: {likes} | Fecha: {post_date}")
+
+            return {
+                "url_post": post_url,
+                "likes": likes,
+                "fecha_post": post_date,
+                "comentarios": comments
+            }
+
+        except Exception as e:
+            print("[ERROR] No se pudo extraer datos del post:", e)
+            return None
+
+
+    def _extract_comments(self):
+        """Extrae hasta 10 comentarios del post y maneja imágenes/GIFs."""
+        comments_data = []
+        
+        try:
+            # Encontrar todos los comentarios dentro del post (limitado a 10)
+            comment_elements = self.driver.find_elements(By.XPATH, "//ul[contains(@class, '_a9z6')]//li[contains(@class, '_a9zj')]")[:10]
+
+            for comment in comment_elements:
+                try:
+                    # Extraer el nombre de usuario
+                    username = comment.find_element(By.XPATH, ".//a").text
+
+                    # Intentar extraer el texto del comentario
+                    try:
+                        comment_text = comment.find_element(By.XPATH, ".//span[contains(@class, '_ap3a')]").text
+                    except:
+                        comment_text = None  # Si no se encuentra texto, asumimos que puede ser una imagen/GIF
+
+                    # Verificar si hay imagen en el comentario
+                    has_image = comment.find_elements(By.XPATH, ".//img")
+
+                    if comment_text:
+                        comments_data.append({username: comment_text})
+                    elif has_image:
+                        comments_data.append({username: "image"})
+                    else:
+                        comments_data.append({username: "unknown"})  # En caso de que no detecte ni texto ni imagen
+
+                except Exception as e:
+                    print(f"⚠️ Error extrayendo un comentario: {e}")
+                    continue  # Saltar al siguiente comentario si hay error
+
+        except Exception as e:
+            print(f"⚠️ No se pudieron extraer comentarios: {e}")
+
+        return comments_data
+
+
+
+
+    def _click_next_post(self):
+        """Hace clic en el botón 'Next' del modal para avanzar al siguiente post."""
+        try:
+            # Esperar a que el botón Next esté visible y clickeable
+            next_button = WebDriverWait(self.driver, 5).until(
+                EC.presence_of_element_located((By.XPATH, "//button[contains(., 'Next')]"))
+            )
+            
+            # Verificar si el botón está realmente visible
+            if next_button.is_displayed():
+                print("➡️ Botón Next detectado, intentando hacer clic...")
+
+                # Mover el mouse al botón para simular un comportamiento humano
+                self.action.move_to_element(next_button).perform()
+                time.sleep(1)
+
+                # Hacer clic en el botón Next
+                self.driver.execute_script("arguments[0].click();", next_button)
+                self._human_delay(3, 5)
+
+                print("✅ Avanzando al siguiente post...")
+                return True
+            else:
+                print("⚠️ El botón Next está presente pero no visible.")
+                return False
+
+        except Exception as e:
+            print("⚠️ No hay más posts disponibles o no se pudo hacer clic en 'Next'.", e)
+            return False
+
+
+
+        
+        
     def save_to_csv(self, data, filename):
-        """
-        Guarda los datos extraídos en un archivo CSV.
-        """
+        """Guarda los datos extraídos en un archivo CSV y muestra el DataFrame antes."""
         if not data:
-            print("No hay datos para guardar en CSV.")
+            print("⚠️ No hay datos para guardar.")
             return
-        keys = data[0].keys()
-        with open(filename, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=keys)
-            writer.writeheader()
-            writer.writerows(data)
+        
+        # Convertir los datos en un DataFrame
+        df = pd.DataFrame(data)
+        
+        # Mostrar el DataFrame visualmente antes de guardarlo
+        
+        print("\n📊 [INFO] DataFrame generado:")
+        print(df.head(20))  # Mostrar los primeros 20 registros
+
+        # Guardar en CSV
+        df.to_csv(filename, index=False, encoding='utf-8')
         print(f"[INFO] Se guardaron {len(data)} filas en {filename}.")
 
 # =========================================================================
@@ -286,3 +370,5 @@ if __name__ == "__main__":
     finally:
         scraper.driver.quit()
         print("[INFO] Selenium cerrado.")
+
+
