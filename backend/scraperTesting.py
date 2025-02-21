@@ -4,10 +4,14 @@ import csv
 import traceback
 from fake_useragent import UserAgent
 from datetime import datetime
-from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 
 # =========================================================================
 # CONFIGURACIÓN GENERAL
@@ -19,13 +23,12 @@ INSTA_PASS = "provisional2628"
 
 # Lista de cuentas a extraer
 ACCOUNTS = [
-    "disneystudiosla", "paramountmexico", "videocine",
-    "sonypicturesmx", "diamondfilmsmex", "universalmx",
-    "warnerbrosmx", "corazonfilms"
+ "universalmx"
 ]
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
+MAX_POSTS = 20  # Número máximo de posts a extraer
 
 # =========================================================================
 # CLASE SCRAPER
@@ -39,24 +42,35 @@ class InstagramScraper:
         """
         Configura Selenium con el proxy residencial de Bright Data.
         """
-        PROXY_HOST = "brd.superproxy.io"
-        PROXY_PORT = "33335"
-        PROXY_USER = "brd-customer-hl_5c6b7303-zone-residential_proxy1"
-        PROXY_PASS = "c6y6ev5szcrn"
+        PROXY_HOST = "gate.smartproxy.com"
+        PROXY_PORT = "1009"
+        PROXY_USER = "sp03mahcda"
+        PROXY_PASS = "X3s_awrkk90gNbs0YX"
 
-        # Configuración de Proxy en Chrome
-        options = webdriver.ChromeOptions()
-        proxy_argument = f"--proxy-server=http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
-        options.add_argument(proxy_argument)
-
-        # Opciones anti detección Selenium
+        proxy_options = {
+            "proxy": {
+                "http": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+                "https": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+                "no_proxy": "localhost,127.0.0.1",
+            }
+        }
+        # Configuración del navegador
+        options = uc.ChromeOptions()
         options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument(f"--user-agent={self._random_user_agent()}")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--start-maximized")
 
-        # Iniciar WebDriver con las opciones configuradas
-        driver = webdriver.Chrome(options=options)
+        # Opciones anti detección Selenium
+        options.add_argument(f"--user-agent={self._random_user_agent()}")
+        #options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        #options.add_experimental_option("useAutomationExtension", False)
+
+        # Iniciar Chrome con `undetected_chromedriver`
+        driver = uc.Chrome(options=options)
+
+
         driver.set_page_load_timeout(60)
         driver.implicitly_wait(10)
         return driver
@@ -65,17 +79,61 @@ class InstagramScraper:
         """
         Devuelve un User-Agent aleatorio para evitar detección.
         """
-        ua = UserAgent()
-        random_user_agent = ua.random
-        # agents = [
-        #     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        #     " (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-        #     "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2_1 like Mac OS X)"
-        #     " AppleWebKit/605.1.15 (KHTML, like Gecko)"
-        #     " Version/15.2 Mobile/15E148 Safari/604.1",
-        # ]
-        # return random.choice(agents)
-        return random_user_agent
+        # ua = UserAgent()
+        # random_user_agent = ua.random
+        agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2_1 like Mac OS X)"
+            " AppleWebKit/605.1.15 (KHTML, like Gecko)"
+            " Version/15.2 Mobile/15E148 Safari/604.1",
+
+    # Navegadores Chrome en Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+
+    # Navegadores Chrome en macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+
+    # Navegadores Firefox en Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/109.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/108.0",
+
+    # Navegadores Firefox en macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/110.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/109.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/108.0",
+
+    # Navegadores Safari en macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Safari/605.1.15",
+
+    # Navegadores Chrome en Android
+    "Mozilla/5.0 (Linux; Android 12; SM-S901U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 12; SM-S901U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 12; SM-S901U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Mobile Safari/537.36",
+
+    # Navegadores Safari en iPhone
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.2 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+
+    # Navegadores Edge en Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.46",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.55",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Edg/108.0.1462.46",
+
+    # Navegadores Opera en Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 OPR/96.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 OPR/95.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 OPR/94.0.0.0",
+
+        ]
 
 
     def _human_delay(self, min_s=1.0, max_s=3.0):

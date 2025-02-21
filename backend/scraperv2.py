@@ -8,6 +8,11 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import undetected_chromedriver as uc
+
+
 
 # =========================================================================
 # CONFIGURACIÓN GENERAL
@@ -18,11 +23,14 @@ INSTA_USER = "redzone_rr"
 INSTA_PASS = "provisional2628"
 
 # Lista de cuentas a extraer
+# ACCOUNTS = [
+#     "disneystudiosla", "paramountmexico", "videocine",
+#     "sonypicturesmx", "diamondfilmsmex", "universalmx",
+#     "warnerbrosmx", "corazonfilms"
+# ]
 ACCOUNTS = [
-    "disneystudiosla", "paramountmexico", "videocine",
-    "sonypicturesmx", "diamondfilmsmex", "universalmx",
-    "warnerbrosmx", "corazonfilms"
-]
+ "universalmx"]
+
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
@@ -37,12 +45,14 @@ class InstagramScraper:
 
     def _setup_driver(self):
         """
-        Configura Selenium con el proxy residencial de Bright Data.
+        Configura Selenium con el proxy residencial de .
         """
         PROXY_HOST = "brd.superproxy.io"
         PROXY_PORT = "33335"
-        PROXY_USER = "brd-customer-hl_5c6b7303-zone-residential_proxy1"
-        PROXY_PASS = "c6y6ev5szcrn"
+        # PROXY_USER = "brd-customer-hl_5c6b7303-zone-residential_proxy1"
+        # PROXY_PASS = "c6y6ev5szcrn"
+        PROXY_USER = "sp03mahcda"
+        PROXY_PASS = "X3s_awrkk90gNbs0YX"
 
         # Configuración de Proxy en Chrome
         options = webdriver.ChromeOptions()
@@ -54,9 +64,15 @@ class InstagramScraper:
         options.add_argument(f"--user-agent={self._random_user_agent()}")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
+
+
 
         # Iniciar WebDriver con las opciones configuradas
         driver = webdriver.Chrome(options=options)
+        driver = uc.Chrome()
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         driver.set_page_load_timeout(60)
         driver.implicitly_wait(10)
         return driver
@@ -65,17 +81,17 @@ class InstagramScraper:
         """
         Devuelve un User-Agent aleatorio para evitar detección.
         """
-        ua = UserAgent()
-        random_user_agent = ua.random
-        # agents = [
-        #     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        #     " (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-        #     "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2_1 like Mac OS X)"
-        #     " AppleWebKit/605.1.15 (KHTML, like Gecko)"
-        #     " Version/15.2 Mobile/15E148 Safari/604.1",
-        # ]
-        # return random.choice(agents)
-        return random_user_agent
+        # ua = UserAgent()
+        # random_user_agent = ua.random
+        agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2_1 like Mac OS X)"
+            " AppleWebKit/605.1.15 (KHTML, like Gecko)"
+            " Version/15.2 Mobile/15E148 Safari/604.1",
+        ]
+        return random.choice(agents)
+        #return random_user_agent
 
 
     def _human_delay(self, min_s=1.0, max_s=3.0):
@@ -89,38 +105,36 @@ class InstagramScraper:
 
     def login(self):
         """
-        Inicia sesión en Instagram con las credenciales.
+        Inicia sesión en Instagram con espera dinámica.
         """
         self.driver.get("https://www.instagram.com/")
         self._human_delay(3, 5)
 
         try:
-            # Aceptar cookies
-            allow_btn = self.driver.find_element(By.XPATH, "//button[contains(., 'Permitir')]")
-            allow_btn.click()
-            self._human_delay(1, 2)
-        except:
-            pass
+            # Esperar a que el campo de usuario aparezca
+            username_input = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.NAME, "username"))
+            )
+            password_input = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.NAME, "password"))
+            )
 
-        try:
-            username_input = self.driver.find_element(By.NAME, "username")
-            password_input = self.driver.find_element(By.NAME, "password")
-
-            # Escribir usuario y contraseña
             username_input.send_keys(INSTA_USER)
             self._human_delay(0.5, 1.0)
             password_input.send_keys(INSTA_PASS)
 
-            # Click en "Iniciar sesión"
-            login_btn = self.driver.find_element(By.XPATH, "//button[@type='submit']")
+            login_btn = WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
+            )
             login_btn.click()
 
             self._human_delay(5, 8)
 
             if "login" in self.driver.current_url:
-                raise Exception("Error de autenticación (quizás 2FA o captcha).")
-            else:
-                print("[INFO] Login completado.")
+                raise Exception("Error de autenticación (quizás CAPTCHA o 2FA).")
+
+            print("[INFO] Login completado.")
+
         except Exception as e:
             print("[ERROR] en login:", e)
             traceback.print_exc()

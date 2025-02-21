@@ -8,6 +8,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
+from seleniumwire import webdriver 
 
 # =========================================================================
 # CONFIGURACIÓN GENERAL
@@ -19,9 +20,7 @@ INSTA_PASS = "provisional2628"
 
 # Lista de cuentas a extraer
 ACCOUNTS = [
-    "disneystudiosla", "paramountmexico", "videocine",
-    "sonypicturesmx", "diamondfilmsmex", "universalmx",
-    "warnerbrosmx", "corazonfilms"
+ "universalmx"
 ]
 
 # Año mínimo a filtrar
@@ -36,29 +35,39 @@ class InstagramScraper:
         self.action = ActionChains(self.driver)
 
     def _setup_driver(self):
+
         """
-        Configura Selenium con el proxy residencial de Bright Data.
+        Configura Selenium con el proxy residencial de .
         """
         PROXY_HOST = "brd.superproxy.io"
         PROXY_PORT = "33335"
-        PROXY_USER = "brd-customer-hl_5c6b7303-zone-residential_proxy1"
-        PROXY_PASS = "c6y6ev5szcrn"
+        # PROXY_USER = "brd-customer-hl_5c6b7303-zone-residential_proxy1"
+        # PROXY_PASS = "c6y6ev5szcrn"
+        PROXY_USER = "sp03mahcda"
+        PROXY_PASS = "X3s_awrkk90gNbs0YX"
 
-        # Configuración de Proxy en Chrome
+        """ Configura Selenium con un proxy residencial que requiere autenticación. """
         options = webdriver.ChromeOptions()
-        proxy_argument = f"--proxy-server=http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
-        options.add_argument(proxy_argument)
-
-        # Opciones anti detección Selenium
         options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument(f"--user-agent={self._random_user_agent()}")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--headless")  # Ejecuta en modo sin interfaz gráfica (opcional)
 
-        # Iniciar WebDriver con las opciones configuradas
-        driver = webdriver.Chrome(options=options)
+        # CONFIGURACIÓN DEL PROXY CON AUTENTICACIÓN
+        proxy_options = {
+            "proxy": {
+                "http": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+                "https": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+                "no_proxy": "localhost,127.0.0.1"
+            }
+        }
+
+        # Iniciar WebDriver con Proxy
+        driver = webdriver.Chrome(seleniumwire_options=proxy_options, options=options)
         driver.set_page_load_timeout(60)
         driver.implicitly_wait(10)
+
         return driver
 
     def _random_user_agent(self):
