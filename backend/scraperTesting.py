@@ -9,6 +9,7 @@ import undetected_chromedriver as uc
 
 from agents import agents
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
@@ -31,7 +32,8 @@ ACCOUNTS = [
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
-MAX_POSTS = 300  # Número máximo de posts a extraer
+MAX_POSTS = 5  # Número máximo de posts a extraer
+NUM_SCROLLS=6
 
 # =========================================================================
 # CLASE SCRAPER
@@ -46,7 +48,7 @@ class InstagramScraper:
         Configura Selenium con el proxy residencial de Bright Data.
         """
         PROXY_HOST = "gate.smartproxy.com"
-        PROXY_PORT = "1009"
+        PROXY_PORT = "1005"
         PROXY_USER = "sp03mahcda"
         PROXY_PASS = "X3s_awrkk90gNbs0YX"
 
@@ -58,20 +60,33 @@ class InstagramScraper:
             }
         }
         # Configuración del navegador
+        # Opciones del navegador Chrome
         options = uc.ChromeOptions()
+        
+        # 🔒 Evita que los sitios detecten Selenium
         options.add_argument("--disable-blink-features=AutomationControlled")
+
+        # ⚡ Optimiza el rendimiento en servidores sin interfaz gráfica
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+
+        # 🖥️ Simula navegación real en una ventana maximizada
         options.add_argument("--start-maximized")
 
-        # Opciones anti detección Selenium
-        options.add_argument(f"--user-agent={self._random_user_agent()}")
-        #options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        #options.add_experimental_option("useAutomationExtension", False)
+        # 🔕 Evita notificaciones emergentes y bloqueos de pop-ups
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-popup-blocking")
+        options.add_argument("--disable-notifications")
 
-        # Iniciar Chrome con `undetected_chromedriver`
-        driver = uc.Chrome(options=options)
+        # 🔄 Cambia dinámicamente el User-Agent para evitar detección
+        options.add_argument(f"--user-agent={self._random_user_agent()}")
+
+        # 🔍 Evita filtración de IP real cuando se usan proxies
+        options.add_argument("--disable-webrtc")
+
+        # 🚀 Inicializa el navegador con opciones anti-detección
+        driver = uc.Chrome(options=options, use_subprocess=True)
 
 
         driver.set_page_load_timeout(60)
@@ -142,7 +157,24 @@ class InstagramScraper:
         body = self.driver.find_element(By.TAG_NAME, "body")
         for _ in range(random.randint(3, 6)):
             body.send_keys(Keys.PAGE_DOWN)
-            self._human_delay(1.5, 3.0)
+            self._human_delay(3.5, 6.7)
+    
+    def _scroll_n_times(self, times=10, pause_every=30):
+        """
+        Realiza scroll hacia abajo un número específico de veces en la página de perfil.
+        Después de cada `pause_every` scrolls, realiza una pausa de entre 1 minuto y 2.5 minutos.
+        """
+        body = self.driver.find_element(By.TAG_NAME, "body")
+        for i in range(1, times + 1):
+            print(f"🔽 [INFO] Scroll {i}/{times}...")
+            body.send_keys(Keys.PAGE_DOWN)
+            self._human_delay(3.5, 6.7)  # Simular pausa humana
+
+            # Si el número de scrolls alcanza el umbral, hacer una pausa larga
+            if i % pause_every == 0:
+                pause_time = random.uniform(60, 150)  # Entre 1 min (60s) y 2.5 min (150s)
+                print(f"⏸️ [INFO] Pausa larga de {pause_time:.2f} segundos después de {i} scrolls...")
+                time.sleep(pause_time)
 
 #===========================================================================
 
@@ -153,15 +185,17 @@ class InstagramScraper:
         """Extrae posts del perfil de Instagram especificado."""
         print(f"\n🔍 [INFO] Abriendo perfil de {username}...")
         self.driver.get(f"https://www.instagram.com/{username}/")
-        self._human_delay(3, 5)
-        self._human_delay(2, 4)
+        self._human_delay(3.1, 5.9)
+        self._human_delay(1.9, 3.9)
+
+        self._scroll_n_times(NUM_SCROLLS)
 
         # Intentar abrir el primer post
-        if not self._open_first_post():
-            print(f"⚠️ [WARNING] No se pudo abrir el primer post de {username}. Saliendo...")
+        if not self._click_last_post():
+            print(f"⚠️ [WARNING] No se pudo abrir el ultimo post de {username}. Saliendo...")
             return []
 
-        self._human_delay(3, 5)
+        self._human_delay(2.9, 4.9)
 
         posts_data = []
         for i in range(MAX_POSTS):
@@ -175,8 +209,8 @@ class InstagramScraper:
                     print(f"⚠️ [WARNING] No se pudo extraer datos del post {i+1}. Intentando siguiente...")
 
                 # Intentar ir al siguiente post
-                if not self._click_next_post():
-                    print("⚠️ [INFO] No hay más posts disponibles o no se pudo hacer clic en 'Next'. Terminando extracción.")
+                if not self._click_previous_post():
+                    print("⚠️ [INFO] No hay más posts disponibles o no se pudo hacer clic en 'Go back'. Terminando extracción.")
                     break  # Salimos del loop si no hay más posts
 
             except Exception as e:
@@ -209,6 +243,40 @@ class InstagramScraper:
             self.driver.save_screenshot("error_screenshot.png")  # Guardar una captura de pantalla
             print("[INFO] Captura de pantalla guardada como error_screenshot.png")
             return False
+        
+    def _click_last_post(self):
+        """
+        Busca y hace clic en el último post visible con:
+        - Un <a> cuyo href contenga 'universalmx/'
+        - Un <div> con 'padding-bottom: 133.'
+        """
+        self._human_delay(2.2, 4.7)
+        try:
+            # Encuentra todos los elementos <a> que contienen 'universalmx/' en su href
+            posts = self.driver.find_elements(By.XPATH, "//a[contains(@href, 'universalmx/') and descendant::div[contains(@style, 'padding-bottom: 133.')]]")
+
+            if not posts:
+                print("⚠️ No se encontraron posts con los criterios especificados después del scroll.")
+                return False
+
+            # Seleccionar el último post de la lista
+            last_post = posts[-1]
+
+            # Asegurar que el post es visible antes de hacer clic
+            self.driver.execute_script("arguments[0].scrollIntoView();", last_post)
+            self._human_delay(1, 2)
+            self.driver.execute_script("arguments[0].click();", last_post)  # Clic usando JavaScript
+            self._human_delay(2.3, 4.8)
+            print("✅ Último post del renglón abierto con éxito.")
+            return True
+
+        except Exception as e:
+            print("[ERROR] No se pudo abrir el último post visible después del scroll:", e)
+            self.driver.save_screenshot("error_screenshot.png")  # Guardar una captura de pantalla
+            print("[INFO] Captura de pantalla guardada como error_screenshot.png")
+            return False
+
+
 
 
 
@@ -286,6 +354,66 @@ class InstagramScraper:
             print(f"⚠️ No se pudieron extraer comentarios: {e}")
 
         return comments_data
+    
+    #===========================================================================================
+    def _extract_commentsV2(self):
+        """Extrae hasta 20 comentarios del post y maneja imágenes/GIFs."""
+        comments_data = []
+        
+        try:
+            # Encontrar todos los comentarios dentro del post (limitado a 10)
+            comment_elements = self.driver.find_elements(By.XPATH, "//ul//li[descendant::time]")[:20]
+
+
+            for comment in comment_elements:
+                try:
+                    # Extraer el nombre de usuario buscando el enlace dentro del comentario
+                    try:
+                        username = comment.find_element(By.XPATH, ".//a[contains(@href, '/')]").text
+                    except NoSuchElementException:
+                        username = "unknown"
+
+                    # Intentar extraer el texto del comentario
+                    try:
+                        comment_text = comment.find_element(By.XPATH, ".//span").text
+                    except NoSuchElementException:
+                        comment_text = None  # Puede ser una imagen/GIF
+
+                    # Extraer la fecha del comentario buscando el elemento <time>
+                    try:
+                        date = comment.find_element(By.XPATH, ".//time").get_attribute("datetime")
+                    except NoSuchElementException:
+                        date = None  # Si no se encuentra la fecha
+
+                    # Extraer número de likes buscando botones con texto "likes"
+                    try:
+                        likes = comment.find_element(By.XPATH, ".//button[contains(text(), 'like')]").text
+                    except NoSuchElementException:
+                        likes = "0 likes"  # Si no tiene likes visibles
+
+                    # Verificar si el comentario tiene una imagen/GIF en lugar de texto
+                    try:
+                        image_element = comment.find_element(By.XPATH, ".//img")
+                        image_url = image_element.get_attribute("src")
+                    except NoSuchElementException:
+                        image_url = None
+
+                    if comment_text:
+                        comments_data.append({username: (comment_text, date, likes)})
+                    elif image_url:
+                        comments_data.append({username: (image_url, date, likes)})  # Guarda la URL de la imagen/GIF
+                    else:
+                        comments_data.append({username: ("unknown", date, likes)})  # Si no tiene texto ni imagen
+
+                except Exception as e:
+                    print(f"⚠️ Error extrayendo un comentario: {e}")
+                    continue  # Saltar al siguiente comentario en caso de error
+
+        except Exception as e:
+            print(f"⚠️ No se pudieron extraer comentarios: {e}")
+
+        return comments_data
+    #===========================================================================================
 
 
 
@@ -318,6 +446,37 @@ class InstagramScraper:
 
         except Exception as e:
             print("⚠️ No hay más posts disponibles o no se pudo hacer clic en 'Next'.", e)
+            return False
+        
+
+    def _click_previous_post(self):
+        """Hace clic en el botón 'Go back' del modal para avanzar al siguiente post."""
+        try:
+            # Esperar a que el botón Go back esté visible y clickeable
+            go_back_button = WebDriverWait(self.driver, 5).until(
+                EC.presence_of_element_located((By.XPATH, "//button[contains(., 'Go back')]"))
+            )
+            
+            # Verificar si el botón está realmente visible
+            if go_back_button.is_displayed():
+                print("➡️ Botón Go back detectado, intentando hacer clic...")
+
+                # Mover el mouse al botón para simular un comportamiento humano
+                self.action.move_to_element(go_back_button).perform()
+                time.sleep(1)
+
+                # Hacer clic en el botón Go back
+                self.driver.execute_script("arguments[0].click();", go_back_button)
+                self._human_delay(3.2, 5.9)
+
+                print("✅ Avanzando al siguiente post...")
+                return True
+            else:
+                print("⚠️ El botón Go back está presente pero no visible.")
+                return False
+
+        except Exception as e:
+            print("⚠️ No hay más posts disponibles o no se pudo hacer clic en 'Go back'.", e)
             return False
 
 
