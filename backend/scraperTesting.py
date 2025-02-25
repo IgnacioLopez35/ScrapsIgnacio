@@ -32,8 +32,8 @@ ACCOUNTS = [
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
-MAX_POSTS = 5  # Número máximo de posts a extraer
-NUM_SCROLLS=6
+MAX_POSTS = 300 # Número máximo de posts a extraer
+NUM_SCROLLS=99
 
 # =========================================================================
 # CLASE SCRAPER
@@ -188,7 +188,7 @@ class InstagramScraper:
         self._human_delay(3.1, 5.9)
         self._human_delay(1.9, 3.9)
 
-        self._scroll_n_times(NUM_SCROLLS)
+        self._scroll_n_times(NUM_SCROLLS,31)
 
         # Intentar abrir el primer post
         if not self._click_last_post():
@@ -300,6 +300,8 @@ class InstagramScraper:
             except:
                 post_date = "No disponible"
 
+            # Extraer comment del autor
+            author_comment = self._author_comment()
             # Extraer comentarios
             comments = self._extract_comments()
 
@@ -307,6 +309,7 @@ class InstagramScraper:
 
             return {
                 "url_post": post_url,
+                "author_comment":author_comment,
                 "likes": likes,
                 "fecha_post": post_date,
                 "comentarios": comments
@@ -358,7 +361,7 @@ class InstagramScraper:
     #===========================================================================================
     def _extract_commentsV2(self):
         """Extrae hasta 20 comentarios del post y maneja imágenes/GIFs."""
-        comments_data = []
+        comments_data = {}
         
         try:
             # Encontrar todos los comentarios dentro del post (limitado a 10)
@@ -369,7 +372,7 @@ class InstagramScraper:
                 try:
                     # Extraer el nombre de usuario buscando el enlace dentro del comentario
                     try:
-                        username = comment.find_element(By.XPATH, ".//a[contains(@href, '/')]").text
+                        username = comment.find_element(By.XPATH, ".//img[contains(@alt, ' profile picture')]").get_attribute("alt").replace("'s profile picture", "")
                     except NoSuchElementException:
                         username = "unknown"
 
@@ -387,21 +390,22 @@ class InstagramScraper:
 
                     # Extraer número de likes buscando botones con texto "likes"
                     try:
-                        likes = comment.find_element(By.XPATH, ".//button[contains(text(), 'like')]").text
+                        likes = comment.find_element(By.XPATH, ".//button/span[contains(text(), 'like')]").text
                     except NoSuchElementException:
                         likes = "0 likes"  # Si no tiene likes visibles
 
                     # Verificar si el comentario tiene una imagen/GIF en lugar de texto
                     try:
-                        image_element = comment.find_element(By.XPATH, ".//img")
-                        image_url = image_element.get_attribute("src")
+                        image_element = comment.find_elements(By.XPATH, ".//img[not(contains(@alt, ' profile picture'))]")
+                        image_url = image_element[0].get_attribute("src") if image_element else None
                     except NoSuchElementException:
                         image_url = None
 
+                    # Guardar los datos correctamente
                     if comment_text:
                         comments_data.append({username: (comment_text, date, likes)})
                     elif image_url:
-                        comments_data.append({username: (image_url, date, likes)})  # Guarda la URL de la imagen/GIF
+                        comments_data.append({username: ("image/GIF", image_url, date, likes)})
                     else:
                         comments_data.append({username: ("unknown", date, likes)})  # Si no tiene texto ni imagen
 
@@ -413,6 +417,40 @@ class InstagramScraper:
             print(f"⚠️ No se pudieron extraer comentarios: {e}")
 
         return comments_data
+    
+
+
+
+    def _author_comment(self):
+        """Extrae el comentario del autor del post en Instagram."""
+        try:
+            # Buscar el primer comentario dentro del post (usualmente el del autor)
+            author_comment_element = self.driver.find_element(By.XPATH, "//ul//li[descendant::h1]")
+
+            # Extraer el nombre de usuario
+            username = author_comment_element.find_element(By.XPATH, ".//a").text
+
+            # Extraer el texto completo del comentario
+            comment_text = author_comment_element.find_element(By.XPATH, ".//h1").text
+
+            # Extraer hashtags (#)
+            hashtags = [tag.text for tag in author_comment_element.find_elements(By.XPATH, ".//a[contains(@href, '/explore/tags/')]")]
+
+            # Extraer menciones (@)
+            mentions = [mention.text for mention in author_comment_element.find_elements(By.XPATH, ".//a") if '@' in mention.text]
+
+            return {
+                "author": username,
+                "comment": comment_text,
+                "hashtags": hashtags,
+                "mentions": mentions
+            }
+
+        except NoSuchElementException:
+            print("⚠️ No se encontró comentario del autor.")
+            return None
+
+
     #===========================================================================================
 
 
