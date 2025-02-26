@@ -34,7 +34,7 @@ ACCOUNT = "warnerbrosmx"
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
 MAX_POSTS = 5 # Número máximo de pocleasts a extraer
-NUM_SCROLLS=5
+NUM_SCROLLS=0
 
 # =========================================================================
 # CLASE SCRAPER
@@ -259,7 +259,7 @@ class InstagramScraper:
         self._human_delay(2.2, 4.7)
         try:
             # Encuentra todos los elementos <a> que contienen 'universalmx/' en su href
-            posts = self.driver.find_elements(By.XPATH, "//a[contains(@href, 'universalmx/') and descendant::div[contains(@style, 'padding-bottom: 133.')]]")
+            posts = self.driver.find_elements(By.XPATH, f"//a[contains(@href, '{ACCOUNT}/') and descendant::div[contains(@style, 'padding-bottom: 133.')]]")
 
             if not posts:
                 print("⚠️ No se encontraron posts con los criterios especificados después del scroll.")
