@@ -27,13 +27,14 @@ INSTA_PASS = "provisional2628"
 
 # Lista de cuentas a extraer
 ACCOUNTS = [
- "universalmx"
+ "warnerbrosmx"
 ]
+ACCOUNT = "warnerbrosmx"
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
-MAX_POSTS = 300 # Número máximo de posts a extraer
-NUM_SCROLLS=99
+MAX_POSTS = 5 # Número máximo de pocleasts a extraer
+NUM_SCROLLS=5
 
 # =========================================================================
 # CLASE SCRAPER
@@ -72,7 +73,9 @@ class InstagramScraper:
         options.add_argument("--disable-gpu")
 
         # 🖥️ Simula navegación real en una ventana maximizada
-        options.add_argument("--start-maximized")
+        #options.add_argument("--start-maximized")
+        # 🚀 Modo headless (sin interfaz gráfica)
+        options.add_argument("--headless=new")
 
         # 🔕 Evita notificaciones emergentes y bloqueos de pop-ups
         options.add_argument("--disable-extensions")
@@ -162,8 +165,11 @@ class InstagramScraper:
     def _scroll_n_times(self, times=10, pause_every=30):
         """
         Realiza scroll hacia abajo un número específico de veces en la página de perfil.
-        Después de cada `pause_every` scrolls, realiza una pausa de entre 1 minuto y 2.5 minutos.
+        Si `times` es 0, la función simplemente pasa.
         """
+        if times <= 0:
+            print("🔕 [INFO] Skipping scrolling as times is set to 0.")
+            return 
         body = self.driver.find_element(By.TAG_NAME, "body")
         for i in range(1, times + 1):
             print(f"🔽 [INFO] Scroll {i}/{times}...")
@@ -188,7 +194,7 @@ class InstagramScraper:
         self._human_delay(3.1, 5.9)
         self._human_delay(1.9, 3.9)
 
-        self._scroll_n_times(NUM_SCROLLS,31)
+        self._scroll_n_times(NUM_SCROLLS,37)
 
         # Intentar abrir el primer post
         if not self._click_last_post():
@@ -209,8 +215,8 @@ class InstagramScraper:
                     print(f"⚠️ [WARNING] No se pudo extraer datos del post {i+1}. Intentando siguiente...")
 
                 # Intentar ir al siguiente post
-                if not self._click_previous_post():
-                    print("⚠️ [INFO] No hay más posts disponibles o no se pudo hacer clic en 'Go back'. Terminando extracción.")
+                if not self._click_next_post():
+                    print("⚠️ [INFO] No hay más posts disponibles o no se pudo hacer clic en 'Next'. Terminando extracción.")
                     break  # Salimos del loop si no hay más posts
 
             except Exception as e:
@@ -303,13 +309,13 @@ class InstagramScraper:
             # Extraer comment del autor
             author_comment = self._author_comment()
             # Extraer comentarios
-            comments = self._extract_comments()
+            comments = self._extract_commentsV2()
 
             print(f"✅ Post extraído: {post_url} | Likes: {likes} | Fecha: {post_date}")
 
             return {
                 "url_post": post_url,
-                "author_comment":author_comment,
+                "author_comment": author_comment,
                 "likes": likes,
                 "fecha_post": post_date,
                 "comentarios": comments
@@ -364,7 +370,7 @@ class InstagramScraper:
         comments_data = {}
         
         try:
-            # Encontrar todos los comentarios dentro del post (limitado a 10)
+            # Encontrar todos los comentarios dentro del post (limitado a 20)
             comment_elements = self.driver.find_elements(By.XPATH, "//ul//li[descendant::time]")[:20]
 
 
@@ -378,7 +384,7 @@ class InstagramScraper:
 
                     # Intentar extraer el texto del comentario
                     try:
-                        comment_text = comment.find_element(By.XPATH, ".//span").text
+                        comment_text = comment.find_element(By.XPATH, ".//h3/following-sibling::div//span").text
                     except NoSuchElementException:
                         comment_text = None  # Puede ser una imagen/GIF
 
@@ -403,11 +409,11 @@ class InstagramScraper:
 
                     # Guardar los datos correctamente
                     if comment_text:
-                        comments_data.append({username: (comment_text, date, likes)})
+                        comments_data[username] = (comment_text, date, likes)
                     elif image_url:
-                        comments_data.append({username: ("image/GIF", image_url, date, likes)})
+                        comments_data[username] = ("image/GIF", image_url, date, likes)
                     else:
-                        comments_data.append({username: ("unknown", date, likes)})  # Si no tiene texto ni imagen
+                        comments_data[username] = ("unknown", date, likes)  # Si no tiene texto ni imagen
 
                 except Exception as e:
                     print(f"⚠️ Error extrayendo un comentario: {e}")
@@ -427,8 +433,11 @@ class InstagramScraper:
             # Buscar el primer comentario dentro del post (usualmente el del autor)
             author_comment_element = self.driver.find_element(By.XPATH, "//ul//li[descendant::h1]")
 
-            # Extraer el nombre de usuario
-            username = author_comment_element.find_element(By.XPATH, ".//a").text
+            # Extraer el nombre del usuario usando la imagen con alt="profile picture"
+            try:
+                username = author_comment_element.find_element(By.XPATH, ".//img[contains(@alt, ' profile picture')]").get_attribute("alt").replace("'s profile picture", "")
+            except NoSuchElementException:
+                username = "unknown"
 
             # Extraer el texto completo del comentario
             comment_text = author_comment_element.find_element(By.XPATH, ".//h1").text
@@ -521,21 +530,16 @@ class InstagramScraper:
 
         
         
-    def save_to_csv(self, data, filename):
-        """Guarda los datos extraídos en un archivo CSV y muestra el DataFrame antes."""
+    def save_to_csv(self, data, account):
+        """Guarda los datos extraídos en un archivo CSV con formato 'instagram_posts_{ACCOUNT}_DD_MM_YYYY.csv'."""
         if not data:
             print("⚠️ No hay datos para guardar.")
             return
-        
-        # Convertir los datos en un DataFrame
-        df = pd.DataFrame(data)
-        
-        # Mostrar el DataFrame visualmente antes de guardarlo
-        
-        print("\n📊 [INFO] DataFrame generado:")
-        print(df.head(20))  # Mostrar los primeros 20 registros
 
-        # Guardar en CSV
+        df = pd.DataFrame(data)
+        date_str = datetime.now().strftime("%d_%m_%Y")
+        filename = f"instagram_posts_{account}_{date_str}.csv"
+
         df.to_csv(filename, index=False, encoding='utf-8')
         print(f"[INFO] Se guardaron {len(data)} filas en {filename}.")
 
@@ -548,17 +552,15 @@ if __name__ == "__main__":
         # 1) Login
         scraper.login()
 
-        # 2) Recorrer cuentas
-        all_posts = []
-        for account in ACCOUNTS:
-            print(f"\n[INFO] Scrapeando {account}")
-            posts = scraper.scrape_profile(account)
-            all_posts.extend(posts)
-            print(f"[INFO] {account} => {len(posts)} posts extraídos")
-            time.sleep(random.randint(5, 15))
+        # 2) RComienza el scraper
+        
+        print(f"\n[INFO] Scrapeando {ACCOUNT}")
+        posts = scraper.scrape_profile(ACCOUNT)
+
+        print(f"[INFO] {ACCOUNT} => {len(posts)} posts extraídos")
 
         # 3) Guardar en CSV
-        scraper.save_to_csv(all_posts, "instagram_posts_2024.csv")
+        scraper.save_to_csv(posts, ACCOUNT)
         print("\n[OK] Proceso completado.")
 
     except Exception as e:
