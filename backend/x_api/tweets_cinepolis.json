@@ -1,22 +1,21 @@
 {
   "data": [
     {
-      "text": "¡Y me lo topaba todos los días en el espejo sin darme cuenta! Qué cosas de la vida, ¿no? 😅🫠😵‍💫 #Mickey17 https://t.co/EVHOcIRvIe",
-      "id": "1894930489297031345",
-      "created_at": "2025-02-27T02:00:09.000Z",
-      "public_metrics": {
-        "retweet_count": 1,
-        "reply_count": 0,
-        "like_count": 18,
-        "quote_count": 0,
-        "bookmark_count": 1,
-        "impression_count": 4658
-      },
-      "author_id": "40355149",
       "edit_history_tweet_ids": [
         "1894930489297031345"
       ],
+      "id": "1894930489297031345",
       "entities": {
+        "urls": [
+          {
+            "start": 105,
+            "end": 128,
+            "url": "https://t.co/EVHOcIRvIe",
+            "expanded_url": "https://x.com/Cinepolis/status/1894930489297031345/photo/1",
+            "display_url": "pic.x.com/EVHOcIRvIe",
+            "media_key": "3_1894930465846358017"
+          }
+        ],
         "annotations": [
           {
             "start": 94,
@@ -32,37 +31,36 @@
             "end": 104,
             "tag": "Mickey17"
           }
-        ],
-        "urls": [
-          {
-            "start": 105,
-            "end": 128,
-            "url": "https://t.co/EVHOcIRvIe",
-            "expanded_url": "https://x.com/Cinepolis/status/1894930489297031345/photo/1",
-            "display_url": "pic.x.com/EVHOcIRvIe",
-            "media_key": "3_1894930465846358017"
-          }
         ]
       },
+      "public_metrics": {
+        "retweet_count": 1,
+        "reply_count": 0,
+        "like_count": 21,
+        "quote_count": 0,
+        "bookmark_count": 1,
+        "impression_count": 4923
+      },
+      "created_at": "2025-02-27T02:00:09.000Z",
+      "author_id": "40355149",
+      "text": "¡Y me lo topaba todos los días en el espejo sin darme cuenta! Qué cosas de la vida, ¿no? 😅🫠😵‍💫 #Mickey17 https://t.co/EVHOcIRvIe",
       "created_at_cdmx": "2025-02-26 20:00:09"
     },
     {
-      "text": "Gana un pase para la función especial de #MikuNoPuedeCantar este miércoles 12 de Marzo a las 07:00 p.m. en Cinépolis Universidad. \n\n¿Cómo? ✨👉 Cuéntanos en comentarios cuál es tu canción favorita de Hatsune Miku. \n\nTyC\n-Válido para CDMX\n-Tienes hasta el jueves 27 de feb.… https://t.co/0cI7y39yN2",
-      "id": "1894913916008047036",
-      "created_at": "2025-02-27T00:54:18.000Z",
-      "public_metrics": {
-        "retweet_count": 0,
-        "reply_count": 7,
-        "like_count": 13,
-        "quote_count": 0,
-        "bookmark_count": 1,
-        "impression_count": 4547
-      },
-      "author_id": "40355149",
       "edit_history_tweet_ids": [
         "1894913916008047036"
       ],
+      "id": "1894913916008047036",
       "entities": {
+        "urls": [
+          {
+            "start": 272,
+            "end": 295,
+            "url": "https://t.co/0cI7y39yN2",
+            "expanded_url": "https://x.com/i/web/status/1894913916008047036",
+            "display_url": "x.com/i/web/status/1…"
+          }
+        ],
         "annotations": [
           {
             "start": 107,
@@ -85,36 +83,45 @@
             "end": 59,
             "tag": "MikuNoPuedeCantar"
           }
-        ],
-        "urls": [
-          {
-            "start": 272,
-            "end": 295,
-            "url": "https://t.co/0cI7y39yN2",
-            "expanded_url": "https://x.com/i/web/status/1894913916008047036",
-            "display_url": "x.com/i/web/status/1…"
-          }
         ]
       },
+      "public_metrics": {
+        "retweet_count": 0,
+        "reply_count": 7,
+        "like_count": 15,
+        "quote_count": 0,
+        "bookmark_count": 1,
+        "impression_count": 4692
+      },
+      "created_at": "2025-02-27T00:54:18.000Z",
+      "author_id": "40355149",
+      "text": "Gana un pase para la función especial de #MikuNoPuedeCantar este miércoles 12 de Marzo a las 07:00 p.m. en Cinépolis Universidad. \n\n¿Cómo? ✨👉 Cuéntanos en comentarios cuál es tu canción favorita de Hatsune Miku. \n\nTyC\n-Válido para CDMX\n-Tienes hasta el jueves 27 de feb.… https://t.co/0cI7y39yN2",
       "created_at_cdmx": "2025-02-26 18:54:18"
     },
     {
-      "text": "#PalomaPregunta ¿Cuál es tu canción favorita de #HatsuneMiku? ❤️🎤 Yo empiezo: Ghost Rule 🎼🎶 Tú turno, te leo en los comentarios 😎 Más canciones en @Paloma_Nacho. https://t.co/cIYkYftln9",
-      "id": "1894911861382131954",
-      "created_at": "2025-02-27T00:46:08.000Z",
-      "public_metrics": {
-        "retweet_count": 12,
-        "reply_count": 17,
-        "like_count": 66,
-        "quote_count": 1,
-        "bookmark_count": 2,
-        "impression_count": 7180
-      },
-      "author_id": "40355149",
       "edit_history_tweet_ids": [
         "1894911861382131954"
       ],
+      "id": "1894911861382131954",
       "entities": {
+        "mentions": [
+          {
+            "start": 147,
+            "end": 160,
+            "username": "Paloma_Nacho",
+            "id": "1605691417640280085"
+          }
+        ],
+        "urls": [
+          {
+            "start": 162,
+            "end": 185,
+            "url": "https://t.co/cIYkYftln9",
+            "expanded_url": "https://x.com/Cinepolis/status/1894911861382131954/photo/1",
+            "display_url": "pic.x.com/cIYkYftln9",
+            "media_key": "3_1894911851864965120"
+          }
+        ],
         "annotations": [
           {
             "start": 1,
@@ -149,45 +156,37 @@
             "end": 60,
             "tag": "HatsuneMiku"
           }
-        ],
-        "mentions": [
-          {
-            "start": 147,
-            "end": 160,
-            "username": "Paloma_Nacho",
-            "id": "1605691417640280085"
-          }
-        ],
-        "urls": [
-          {
-            "start": 162,
-            "end": 185,
-            "url": "https://t.co/cIYkYftln9",
-            "expanded_url": "https://x.com/Cinepolis/status/1894911861382131954/photo/1",
-            "display_url": "pic.x.com/cIYkYftln9",
-            "media_key": "3_1894911851864965120"
-          }
         ]
       },
+      "public_metrics": {
+        "retweet_count": 12,
+        "reply_count": 17,
+        "like_count": 73,
+        "quote_count": 1,
+        "bookmark_count": 2,
+        "impression_count": 7449
+      },
+      "created_at": "2025-02-27T00:46:08.000Z",
+      "author_id": "40355149",
+      "text": "#PalomaPregunta ¿Cuál es tu canción favorita de #HatsuneMiku? ❤️🎤 Yo empiezo: Ghost Rule 🎼🎶 Tú turno, te leo en los comentarios 😎 Más canciones en @Paloma_Nacho. https://t.co/cIYkYftln9",
       "created_at_cdmx": "2025-02-26 18:46:08"
     },
     {
-      "text": "¿List@ para ver más del mundo de #Minecraft? 😲🤩 ¡Mañana llega nuevo tráiler! Etiqueta al más fan que conoces del juego. 🟩✨ https://t.co/EVXFpvna0L",
-      "id": "1894888983462846969",
-      "created_at": "2025-02-26T23:15:13.000Z",
-      "public_metrics": {
-        "retweet_count": 3,
-        "reply_count": 2,
-        "like_count": 47,
-        "quote_count": 0,
-        "bookmark_count": 2,
-        "impression_count": 5686
-      },
-      "author_id": "40355149",
       "edit_history_tweet_ids": [
         "1894888983462846969"
       ],
+      "id": "1894888983462846969",
       "entities": {
+        "urls": [
+          {
+            "start": 123,
+            "end": 146,
+            "url": "https://t.co/EVXFpvna0L",
+            "expanded_url": "https://x.com/Cinepolis/status/1894888983462846969/video/1",
+            "display_url": "pic.x.com/EVXFpvna0L",
+            "media_key": "7_1894888962768150535"
+          }
+        ],
         "annotations": [
           {
             "start": 34,
@@ -203,37 +202,37 @@
             "end": 43,
             "tag": "Minecraft"
           }
-        ],
-        "urls": [
-          {
-            "start": 123,
-            "end": 146,
-            "url": "https://t.co/EVXFpvna0L",
-            "expanded_url": "https://x.com/Cinepolis/status/1894888983462846969/video/1",
-            "display_url": "pic.x.com/EVXFpvna0L",
-            "media_key": "7_1894888962768150535"
-          }
         ]
       },
+      "public_metrics": {
+        "retweet_count": 3,
+        "reply_count": 2,
+        "like_count": 47,
+        "quote_count": 0,
+        "bookmark_count": 2,
+        "impression_count": 5800
+      },
+      "created_at": "2025-02-26T23:15:13.000Z",
+      "author_id": "40355149",
+      "text": "¿List@ para ver más del mundo de #Minecraft? 😲🤩 ¡Mañana llega nuevo tráiler! Etiqueta al más fan que conoces del juego. 🟩✨ https://t.co/EVXFpvna0L",
       "created_at_cdmx": "2025-02-26 17:15:13"
     },
     {
-      "text": "¡Cada vez falta menos para la #Fiesta Cinépolis! 🥳🎬 No se te olvide: el próximo lunes, martes y miércoles, con boletos, refrescos y palomitas al 50% de descuento. 🍿🥤 https://t.co/5bOaiW4loK",
-      "id": "1894870098722333060",
-      "created_at": "2025-02-26T22:00:11.000Z",
-      "public_metrics": {
-        "retweet_count": 3,
-        "reply_count": 3,
-        "like_count": 60,
-        "quote_count": 1,
-        "bookmark_count": 3,
-        "impression_count": 8131
-      },
-      "author_id": "40355149",
       "edit_history_tweet_ids": [
         "1894870098722333060"
       ],
+      "id": "1894870098722333060",
       "entities": {
+        "urls": [
+          {
+            "start": 166,
+            "end": 189,
+            "url": "https://t.co/5bOaiW4loK",
+            "expanded_url": "https://x.com/Cinepolis/status/1894870098722333060/photo/1",
+            "display_url": "pic.x.com/5bOaiW4loK",
+            "media_key": "3_1894870063846395904"
+          }
+        ],
         "annotations": [
           {
             "start": 31,
@@ -249,18 +248,19 @@
             "end": 37,
             "tag": "Fiesta"
           }
-        ],
-        "urls": [
-          {
-            "start": 166,
-            "end": 189,
-            "url": "https://t.co/5bOaiW4loK",
-            "expanded_url": "https://x.com/Cinepolis/status/1894870098722333060/photo/1",
-            "display_url": "pic.x.com/5bOaiW4loK",
-            "media_key": "3_1894870063846395904"
-          }
         ]
       },
+      "public_metrics": {
+        "retweet_count": 3,
+        "reply_count": 3,
+        "like_count": 60,
+        "quote_count": 1,
+        "bookmark_count": 3,
+        "impression_count": 8235
+      },
+      "created_at": "2025-02-26T22:00:11.000Z",
+      "author_id": "40355149",
+      "text": "¡Cada vez falta menos para la #Fiesta Cinépolis! 🥳🎬 No se te olvide: el próximo lunes, martes y miércoles, con boletos, refrescos y palomitas al 50% de descuento. 🍿🥤 https://t.co/5bOaiW4loK",
       "created_at_cdmx": "2025-02-26 16:00:11"
     }
   ],

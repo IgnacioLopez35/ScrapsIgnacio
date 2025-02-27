@@ -173,7 +173,7 @@ for tweet in data["data"]:
 
 # Crear DataFrame y guardar CSV
 df_tweets = pd.DataFrame(tweets_metrics)
-df_tweets.head()
+print(df_tweets.head())
 csv_filename = "engagement_tweets.csv"
 df_tweets.to_csv(csv_filename, index=False, encoding="utf-8")
 
