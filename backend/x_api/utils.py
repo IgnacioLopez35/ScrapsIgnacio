@@ -1,0 +1,1 @@
+path_env = "/Users/danielortiz/Documents/apis_redes_sociales/backend/x_api/config/"

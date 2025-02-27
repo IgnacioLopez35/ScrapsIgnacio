@@ -33,8 +33,8 @@ ACCOUNT = "warnerbrosmx"
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
-MAX_POSTS = 5 # Número máximo de pocleasts a extraer
-NUM_SCROLLS=0
+MAX_POSTS = 200 # Número máximo de pocleasts a extraer
+NUM_SCROLLS=30
 
 # =========================================================================
 # CLASE SCRAPER
@@ -197,8 +197,8 @@ class InstagramScraper:
         self._scroll_n_times(NUM_SCROLLS,37)
 
         # Intentar abrir el primer post
-        if not self._click_last_post():
-            print(f"⚠️ [WARNING] No se pudo abrir el ultimo post de {username}. Saliendo...")
+        if not self._click_first_post():
+            print(f"⚠️ [WARNING] No se pudo abrir el primer  post de {username}. Saliendo...")
             return []
 
         self._human_delay(2.9, 4.9)
@@ -246,6 +246,37 @@ class InstagramScraper:
 
         except Exception as e:
             print("[ERROR] No se pudo abrir el primer post:", e)
+            self.driver.save_screenshot("error_screenshot.png")  # Guardar una captura de pantalla
+            print("[INFO] Captura de pantalla guardada como error_screenshot.png")
+            return False
+        
+    def _click_first_post(self):
+        """
+        Busca y hace clic en el primer post visible con:
+        - Un <a> cuyo href contenga 'account/'
+        - Un <div> con 'padding-bottom: 133.'
+        """
+        self._human_delay(2.9, 4.1)
+        try:
+            # Encuentra todos los elementos <a> que contienen 'account/' en su href
+            posts = self.driver.find_elements(By.XPATH, f"//a[contains(@href, '{ACCOUNT}/') and descendant::div[contains(@style, 'padding-bottom: 133.')]]")
+
+            if not posts:
+                print("⚠️ No se encontraron posts con los criterios especificados después del scroll.")
+                return False
+
+            # Seleccionar el primer post de la lista
+            last_post = posts[0]
+
+            # Asegurar que el post es visible antes de hacer clic
+            self.driver.execute_script("arguments[0].scrollIntoView();", last_post)
+            self._human_delay(1, 1.5)
+            self.driver.execute_script("arguments[0].click();", last_post)  # Clic usando JavaScript
+            self._human_delay(2.3, 3.6)
+            print("✅ primer post del renglón abierto con éxito.")
+            return True
+        except Exception as e:
+            print("[ERROR] No se pudo abrir el primer post visible después del scroll:", e)
             self.driver.save_screenshot("error_screenshot.png")  # Guardar una captura de pantalla
             print("[INFO] Captura de pantalla guardada como error_screenshot.png")
             return False
