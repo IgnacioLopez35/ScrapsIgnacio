@@ -8,6 +8,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from utils import * 
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, Query
 
 
 # Definir la zona horaria de la Ciudad de México
@@ -94,9 +96,10 @@ headers = {
 #public_metrics
 # Parámetros de búsqueda (últimos 2 tweets)
 params = {
-    "max_results": 5,
+    "max_results": 10,
     "tweet.fields": "article,created_at,public_metrics,text,author_id,entities",
     "media.fields": "url,public_metrics,duration_ms",
+    "expansions": "attachments.media_keys",
     "start_time":start_time_str,
     "end_time":end_time_str,
     "exclude": "retweets,replies"  # Evita respuestas y retweets
@@ -136,13 +139,19 @@ else:
 json_filename = "tweets_cinepolis.json"
 
 
+# Crear un diccionario con los detalles de medios
+media_details = {}
+if "includes" in data and "media" in data["includes"]:
+    for media in data["includes"]["media"]:
+        media_details[media["media_key"]] = media
+
 # Procesar tweets y calcular métricas
 tweets_metrics = []
 
 for tweet in data["data"]:
     tweet_id = tweet["id"]
     text = tweet["text"]
-    created_at = tweet["created_at_cdmx"]
+    created_at = convertir_hora_utc_a_cdmx(tweet["created_at"])
     retweets = tweet["public_metrics"]["retweet_count"]
     replies = tweet["public_metrics"]["reply_count"]
     likes = tweet["public_metrics"]["like_count"]
@@ -153,8 +162,19 @@ for tweet in data["data"]:
     # Calcular engagement
     engagement = retweets + replies + likes + quotes + bookmarks
 
-    # Obtener segundos vistos si están disponibles
-    segundos_vistos = tweet.get("media", {}).get("duration_ms", 0) / 1000  # Convertir de ms a s
+    # Detectar si es un video
+    is_video = False
+    video_views = None
+    segundos_vistos = None
+
+    if "attachments" in tweet and "media_keys" in tweet["attachments"]:
+        for media_key in tweet["attachments"]["media_keys"]:
+            if media_key in media_details:
+                media_info = media_details[media_key]
+                if media_info["type"] == "video":
+                    is_video = True
+                    video_views = media_info.get("public_metrics", {}).get("view_count", None)
+                    segundos_vistos = media_info.get("duration_ms", 0) / 1000
 
     # Guardar métricas
     tweets_metrics.append({
@@ -168,7 +188,9 @@ for tweet in data["data"]:
         "Guardados": bookmarks,
         "Impresiones": impressions,
         "Engagement": engagement,
-        "Segundos Vistos": segundos_vistos
+        "Es_Video": is_video,
+        "Video_Views": video_views if is_video else "N/A",
+        "Segundos_Vistos": segundos_vistos if is_video else "N/A"
     })
 
 # Crear DataFrame y guardar CSV
