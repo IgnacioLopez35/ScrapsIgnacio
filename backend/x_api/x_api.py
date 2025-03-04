@@ -68,6 +68,9 @@ USER_ID  = os.getenv("USER_X_ID")
 # Autenticación con Tweepy
 client = tweepy.Client(bearer_token=BEARER_TOKEN)
 
+# Configuración de FastAPI
+app = FastAPI(title="Twitter Engagement API", version="1.0")
+
 # Obtener el ID de la cuenta de Cinépolis
 USERNAME = "cinepolis"  # Nombre de usuario en X (Twitter)
 try:

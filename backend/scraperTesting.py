@@ -27,14 +27,14 @@ INSTA_PASS = "provisional2628"
 
 # Lista de cuentas a extraer
 ACCOUNTS = [
- "warnerbrosmx"
+ "sonypicturesmx"
 ]
-ACCOUNT = "warnerbrosmx"
+ACCOUNT = "sonypicturesmx"
 
 # Año mínimo a filtrar
 YEAR_FILTER = 2024
-MAX_POSTS = 200 # Número máximo de pocleasts a extraer
-NUM_SCROLLS=30
+MAX_POSTS = 500 # Número máximo de pocleasts a extraer
+NUM_SCROLLS=0
 
 # =========================================================================
 # CLASE SCRAPER
