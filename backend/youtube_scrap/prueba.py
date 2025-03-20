@@ -8,12 +8,12 @@ import time
 import pandas as pd
 
 # Configuración de Smart Proxy
-PROXY_HOST = "proxy.smartproxy.com"
-PROXY_PORT = "1006"
+PROXY_HOST = "gate.smartproxy.com"
+PROXY_PORT = "10009"
 PROXY_USER = "sp03mahcda"
-PROXY_PASS = "X3s_awrkk90gNbs0YX"
+PROXY_PASS = "ax4as2g5_S2HHrmIjl"
 
-# Configura el proxy con autenticación
+# Configurar el proxy con autenticación
 chrome_options = webdriver.ChromeOptions()
 chrome_options.add_argument(f'--proxy-server=http://{PROXY_HOST}:{PROXY_PORT}')
 chrome_options.add_argument(f'--proxy-auth={PROXY_USER}:{PROXY_PASS}')

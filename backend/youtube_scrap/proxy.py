@@ -1,23 +1,30 @@
-import requests
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+import time
 
 # Configuración del proxy
 PROXY_HOST = "gate.smartproxy.com"
-PROXY_PORT = "1006"
+PROXY_PORT = "10009"
 PROXY_USER = "sp03mahcda"
-PROXY_PASS = "X3s_awrkk90gNbs0YX"
+PROXY_PASS = "ax4as2g5_S2HHrmIjl"
 
-# URL de prueba
-url = "http://httpbin.org/ip"
+# Configura el proxy con autenticación
+chrome_options = uc.ChromeOptions()
+chrome_options.add_argument(f'--proxy-server=http://{PROXY_HOST}:{PROXY_PORT}')
+chrome_options.add_argument(f'--proxy-auth={PROXY_USER}:{PROXY_PASS}')
 
-# Configura el proxy
-proxies = {
-    "http": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
-    "https": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
-}
+# Configuraciones adicionales para evitar errores
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
 
-# Realiza la solicitud
-try:
-    response = requests.get(url, proxies=proxies)
-    print(response.json())  # Deberías ver la IP del proxy
-except requests.exceptions.RequestException as e:
-    print(f"Error: {e}")
+# Inicia el navegador con las opciones de proxy
+driver = uc.Chrome(options=chrome_options)
+
+# Prueba la conexión a YouTube
+driver.get("https://www.youtube.com")
+time.sleep(5)  # Espera a que la página cargue
+print(driver.page_source)  # Deberías ver el contenido de la página de YouTube
+
+# Cierra el navegador
+driver.quit()
