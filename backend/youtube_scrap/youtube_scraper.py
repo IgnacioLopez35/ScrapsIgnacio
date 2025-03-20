@@ -1,5 +1,4 @@
 
-import os
 import time
 import random
 import pandas as pd
@@ -10,118 +9,103 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import undetected_chromedriver as uc
 
 # ==================== CONFIGURACIÓN ====================
+# Configuración de Smart Proxy
+PROXY_HOST = "proxy.smartproxy.com"
+PROXY_PORT = "1006"
+PROXY_USER = "sp03mahcda"
+PROXY_PASS = "tomvyfuT9ZG8R1x+p5"
 
-# Configuración de la API de YouTube
-API_KEY = os.getenv("YOUTUBE_API_KEY")
-CHANNEL_IDS = [
-    "UCwTKziMccZoy631_wbxk8wg",  # Disney Studios LA
-    "UC1bOh2t2cLNzGvlRrD5fY-Q",  # Videocine
+# Lista de canales de YouTube
+CHANNEL_URLS = [
+    "https://www.youtube.com/@platacard"
 ]
-START_DATE = "2024-01-01"
-END_DATE = "2024-12-31"
-
-# Configuración de proxy (Bright Data)
-PROXY_HOST = "brd.superproxy.io"
-PROXY_PORT = "33335"
-PROXY_USER = "brd-customer-hl_5c6b7303-zone-residential_proxy1"
-PROXY_PASS = "your_proxy_password"
-
-# ==================== CONEXIÓN API ====================
-youtube = build("youtube", "v3", developerKey=API_KEY)
 
 # ==================== FUNCIÓN PARA LIMPIAR DATOS ====================
 def clean_text(text):
     if isinstance(text, str):
         text = text.encode("utf-8", "ignore").decode("utf-8", "ignore")
         text = unicodedata.normalize("NFKC", text)
-        text = re.sub(r'[^\x20-\x7E]', '', text)
+        text = re.sub(r'[^ -~]', '', text)
         return text.strip()
     return text
 
-# ==================== OBTENER VIDEOS (API) ====================
-def get_all_videos(channel_id, start_date, end_date):
-    videos = []
-    next_page_token = None
-    while True:
-        try:
-            request = youtube.search().list(
-                part="id,snippet",
-                channelId=channel_id,
-                publishedAfter=f"{start_date}T00:00:00Z",
-                publishedBefore=f"{end_date}T23:59:59Z",
-                maxResults=50,
-                type="video",
-                pageToken=next_page_token,
-            )
-            response = request.execute()
-            for item in response.get("items", []):
-                video_id = item["id"]["videoId"]
-                title = clean_text(item["snippet"]["title"])
-                description = clean_text(item["snippet"]["description"])
-                videos.append({
-                    "video_id": video_id,
-                    "title": title,
-                    "description": description
-                })
-            next_page_token = response.get("nextPageToken")
-            if not next_page_token:
+# ==================== CLASE SCRAPER ====================
+class YouTubeScraper:
+    def __init__(self):
+        self.driver = self._setup_driver()
+        self.action = ActionChains(self.driver)
+
+    def _setup_driver(self):
+        options = uc.ChromeOptions()
+        options.add_argument(f'--proxy-server=http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}')
+        options.add_argument("--headless")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+
+        driver = uc.Chrome(version_main=134, options=options)
+        return driver
+
+    def scroll_page(self):
+        scroll_pause_time = random.uniform(1, 2)
+        last_height = self.driver.execute_script("return document.documentElement.scrollHeight")
+        while True:
+            self.driver.execute_script("window.scrollTo(0, document.documentElement.scrollHeight);")
+            time.sleep(scroll_pause_time)
+            new_height = self.driver.execute_script("return document.documentElement.scrollHeight")
+            if new_height == last_height:
                 break
-        except HttpError as e:
-            print(f"Error en la API: {e}")
-            time.sleep(5)
-    return videos
+            last_height = new_height
 
-# ==================== SCRAPING CON SELENIUM ====================
-def scrape_video_details(video_id):
-    chrome_options = Options()
-    chrome_options.add_argument(f'--proxy-server=http://{PROXY_HOST}:{PROXY_PORT}')
-    driver = webdriver.Chrome(options=chrome_options)
-
-    try:
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        driver.get(url)
-        time.sleep(random.uniform(2, 4))
-
-        # Extraer número de likes (si está disponible)
+    def scrape_channel(self, url):
         try:
-            likes = driver.find_element(By.CSS_SELECTOR, "yt-formatted-string[aria-label*='Me gusta']").text
-        except Exception:
-            likes = None
-
-        # Extraer número de comentarios (si está disponible)
-        try:
-            comments_section = driver.find_element(By.ID, "comments")
-            driver.execute_script("arguments[0].scrollIntoView(true);", comments_section)
+            print(f"Accediendo a {url}")
+            self.driver.get(url)
             time.sleep(random.uniform(2, 4))
-            comments_count = driver.find_element(By.CSS_SELECTOR, "h2#count yt-formatted-string").text
-        except Exception:
-            comments_count = None
+            self.scroll_page()
 
-        return {
-            "likes": likes,
-            "comments_count": comments_count
-        }
+            videos = []
+            video_elements = self.driver.find_elements(By.CSS_SELECTOR, 'ytd-grid-video-renderer')
 
-    except Exception as e:
-        print(f"Error en Selenium: {e}")
-    finally:
-        driver.quit()
+            for video in video_elements:
+                try:
+                    title = video.find_element(By.ID, 'video-title').get_attribute('title')
+                    url = video.find_element(By.ID, 'video-title').get_attribute('href')
+                    views = video.find_element(By.CSS_SELECTOR, '#metadata-line span:nth-child(1)').text
+                    date = video.find_element(By.CSS_SELECTOR, '#metadata-line span:nth-child(2)').text
+
+                    videos.append({
+                        "title": clean_text(title),
+                        "url": url,
+                        "views": clean_text(views),
+                        "date": clean_text(date)
+                    })
+                except Exception as e:
+                    print(f"Error al extraer datos del video: {e}")
+
+            return videos
+
+        except Exception as e:
+            print(f"Error en scraping: {e}")
+
+    def close(self):
+        self.driver.quit()
 
 # ==================== FUNCIÓN PRINCIPAL ====================
 def run_youtube_scraper():
+    scraper = YouTubeScraper()
     all_data = []
 
-    for channel in CHANNEL_IDS:
-        print(f"Obteniendo datos del canal: {channel}")
-        videos = get_all_videos(channel, START_DATE, END_DATE)
-        for video in videos:
-            details = scrape_video_details(video["video_id"])
-            video.update(details)
-            all_data.append(video)
+    for url in CHANNEL_URLS:
+        videos = scraper.scrape_channel(url)
+        if videos:
+            all_data.extend(videos)
 
     # Guardar resultados en CSV
     df = pd.DataFrame(all_data)
@@ -129,6 +113,8 @@ def run_youtube_scraper():
     df.drop_duplicates(inplace=True)
     df.to_csv("youtube_scraped_data.csv", index=False)
     print("Datos guardados en youtube_scraped_data.csv")
+
+    scraper.close()
 
 if __name__ == "__main__":
     run_youtube_scraper()
