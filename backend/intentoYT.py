@@ -53,7 +53,7 @@ class YouTubeScraper:
                 EC.presence_of_element_located((By.XPATH, xpath))
             )
             self.driver.execute_script("arguments[0].scrollIntoView(true);", element)
-            self._human_delay(1, 2)  # Pausa corta para dar tiempo a que cargue
+            self._human_delay(1, 2)
         except Exception:
             pass
 
@@ -67,7 +67,7 @@ class YouTubeScraper:
     def extract_likes(self):
         try:
             xpath = '//*[@id="top-level-buttons-computed"]//button[contains(@aria-label, "me gusta")]'
-            self._scroll_to_element(xpath)  # Hacer scroll para que el botón sea visible
+            self._scroll_to_element(xpath)
             likes = WebDriverWait(self.driver, 5).until(
                 EC.visibility_of_element_located((By.XPATH, xpath))
             ).text
@@ -77,8 +77,6 @@ class YouTubeScraper:
 
     def extract_comment(self):
         try:
-            self.driver.execute_script("window.scrollTo(0, document.documentElement.scrollHeight/2);")
-            self._human_delay(1, 2)
             xpath = '//*[@id="content-text"]'
             self._scroll_to_element(xpath)
             comment = WebDriverWait(self.driver, 5).until(
@@ -90,10 +88,10 @@ class YouTubeScraper:
 
     def extract_views(self):
         try:
-            xpath_expanded = '//span[contains(text(),"visualizaciones")]'
-            self._scroll_to_element(xpath_expanded)
+            xpath = '//span[contains(text(),"visualizaciones")]'
+            self._scroll_to_element(xpath)
             views = WebDriverWait(self.driver, 5).until(
-                EC.visibility_of_element_located((By.XPATH, xpath_expanded))
+                EC.visibility_of_element_located((By.XPATH, xpath))
             ).text
             return views if views else "0"
         except Exception:
@@ -101,14 +99,34 @@ class YouTubeScraper:
 
     def extract_publish_date(self):
         try:
-            xpath_expanded = '//span[contains(text(),"20")]'
-            self._scroll_to_element(xpath_expanded)
+            xpath = '//span[contains(text(),"20")]'
+            self._scroll_to_element(xpath)
             date = WebDriverWait(self.driver, 5).until(
-                EC.visibility_of_element_located((By.XPATH, xpath_expanded))
+                EC.visibility_of_element_located((By.XPATH, xpath))
             ).text
             return date if date else "Fecha desconocida"
         except Exception:
             return "Fecha desconocida"
+
+    def extract_description(self):
+        try:
+            # Si el botón de "Mostrar más" está presente, hacemos clic en él
+            try:
+                show_more_button = self.driver.find_element(By.XPATH, '//tp-yt-paper-button[@id="expand"]')
+                self.driver.execute_script("arguments[0].click();", show_more_button)
+                self._human_delay(1, 2)
+            except Exception:
+                pass
+
+            # Extraer la descripción después de expandirla
+            xpath = '//*[@id="description"]//yt-formatted-string'
+            self._scroll_to_element(xpath)
+            description = WebDriverWait(self.driver, 5).until(
+                EC.visibility_of_element_located((By.XPATH, xpath))
+            ).text
+            return description if description else "Sin descripción"
+        except Exception:
+            return "Sin descripción"
 
 # 🔄 LOOP para recorrer los canales
 for channel in channels:
@@ -126,12 +144,11 @@ for channel in channels:
         driver.get(channel)
         scraper._human_delay(2, 4)
 
-        # ✅ Hacer scroll limitado para asegurar carga
+        # ✅ Scroll limitado solo para cargar videos visibles
         for _ in range(3):
             driver.execute_script("window.scrollBy(0, window.innerHeight/2);")
             scraper._human_delay(2, 3)
 
-        # Extraer videos y títulos
         videos = WebDriverWait(driver, 10).until(
             EC.presence_of_all_elements_located((By.XPATH, '//a[contains(@href, "/watch?v=")]'))
         )
@@ -143,27 +160,21 @@ for channel in channels:
             titles = titles[:min_length]
             links = links[:min_length]
 
-        # ✅ Procesar solo los primeros 5 videos
         for link in links[:5]:
             driver.get(link)
             scraper._human_delay(2, 4)
 
             title = scraper.extract_title()
+            description = scraper.extract_description()
             views = scraper.extract_views()
             likes = scraper.extract_likes()
             comment = scraper.extract_comment()
             publish_date = scraper.extract_publish_date()
 
-            data.append([channel, title, views, likes, comment, publish_date, link])
+            data.append([channel, title, views, likes, description, comment, publish_date, link])
 
     except Exception as e:
         print(f"🚨 Error procesando canal {channel}: {e}")
-        # Si falla la carga inicial, hacemos una recarga y lo intentamos una vez más
-        try:
-            driver.refresh()
-            scraper._human_delay(2, 4)
-        except:
-            pass
 
     finally:
         driver.quit()
@@ -172,7 +183,7 @@ for channel in channels:
 csv_file = 'youtube_videos.csv'
 with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
     writer = csv.writer(file)
-    writer.writerow(['Channel', 'Title', 'Views', 'Likes', 'Comment', 'Publish Date', 'Link'])
+    writer.writerow(['Channel', 'Title', 'Views', 'Likes', 'Description', 'Comment', 'Publish Date', 'Link'])
     writer.writerows(data)
 
 print(f"\n✅ Datos escritos en '{csv_file}'")
