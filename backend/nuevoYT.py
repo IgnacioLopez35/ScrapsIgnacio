@@ -5,21 +5,22 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException, StaleElementReferenceException
 from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime, timedelta
 import time
 import csv
 import random
 import re
+import json
 
 # Configuración de filtrado por fecha
-DATE_FILTER = "last_5_months"  # Opciones: "last_5_months", "2024", "none"
-MAX_VIDEOS_TO_CHECK = 30  # Máximo de videos a revisar para encontrar los que cumplen con el filtro
-VIDEOS_TO_SCRAPE = 10  # Número de videos a scrapear por canal que cumplan el filtro
+DATE_FILTER = "last_3_months"  # Opciones: "last_5_months", "2024", "none"
+MAX_VIDEOS_TO_CHECK = 100  # Máximo de videos a revisar para encontrar los que cumplen con el filtro
+VIDEOS_TO_SCRAPE = 50  # Número de videos a scrapear por canal que cumplan el filtro
 # Configuración global
 MAX_RETRIES = 2
-SCROLL_ATTEMPTS = 3
+SCROLL_ATTEMPTS = 1
 PAUSE_EVERY = 3
 # Lista de User-Agents para desktop
 agents = [
@@ -28,9 +29,14 @@ agents = [
 ]
 
 # Lista de canales a escrapear
+
 channels = [
-    "https://www.youtube.com/@PlataCard/videos",
-    "https://www.youtube.com/@numexico/videos"
+    "https://www.youtube.com/@platacard/videos",
+    "https://www.youtube.com/@klar_mx/videos",
+    "https://www.youtube.com/@numexico/videos",
+    "https://www.youtube.com/@MercadoPago/videos",
+    "https://www.youtube.com/@stori_mx/videos",
+    "https://www.youtube.com/c/Ual%C3%A1M%C3%A9xico/videos"
 ]
 
 class YouTubeScraper:
@@ -229,8 +235,8 @@ class YouTubeScraper:
         if not date_obj:
             return False
             
-        if DATE_FILTER == "last_5_months":
-            five_months_ago = datetime.now() - timedelta(days=150)  # ~5 meses
+        if DATE_FILTER == "last_3_months":
+            five_months_ago = datetime.now() - timedelta(days=85)  # ~5 meses
             return date_obj >= five_months_ago
             
         elif DATE_FILTER == "2024":
@@ -247,6 +253,7 @@ def process_channel(channel_url, service):
     
     # Configurar opciones del navegador
     chrome_options = Options()
+    chrome_options.add_argument("--headless=new") #---------------
     chrome_options.add_argument(f"user-agent={random.choice(agents)}")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -350,27 +357,33 @@ def process_channel(channel_url, service):
 def main():
     # Configuración inicial
     service = Service(ChromeDriverManager().install())
-    all_data = []
     
     print(f"\n🔍 Iniciando scraping con filtro: '{DATE_FILTER}'")
     print(f"📊 Objetivo: {VIDEOS_TO_SCRAPE} videos por canal que cumplan el filtro")
     print(f"🔎 Revisando hasta {MAX_VIDEOS_TO_CHECK} videos por canal\n")
     
-    # Procesar cada canal
+    # Procesar cada canal y guardar en CSV individual
     for channel in channels:
         channel_data = process_channel(channel, service)
-        all_data.extend(channel_data)
+        
+        if not channel_data:
+            print(f"⚠️ No se obtuvieron datos para el canal {channel}")
+            continue
+        
+        # Crear nombre de archivo basado en el nombre del canal
+        channel_name = channel.split('@')[-1].split('/')[0]
+        csv_file = f'youtube_videos_{channel_name}.csv'
+        
+        # Guardar en CSV
+        with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Channel', 'Title', 'Views', 'Likes', 'Description', 'Comments', 'Publish Date', 'Link'])
+            writer.writerows(channel_data)
+        
+        print(f"\n✅ Datos del canal {channel_name} guardados en '{csv_file}'")
+        print(f"📝 Total de videos obtenidos: {len(channel_data)}")
+        
         time.sleep(random.uniform(5, 15))
-    
-    # Guardar en CSV
-    csv_file = 'youtube_videos_filtered.csv'
-    with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        writer.writerow(['Channel', 'Title', 'Views', 'Likes', 'Description', 'Comments', 'Publish Date', 'Link'])
-        writer.writerows(all_data)
-    
-    print(f"\n✅ Datos guardados en '{csv_file}'")
-    print(f"📝 Total de videos obtenidos: {len(all_data)}")
 
 if __name__ == "__main__":
     main()
