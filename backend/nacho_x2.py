@@ -220,7 +220,6 @@ class TwitterScraper:
             ]
         }
 
-    # Añadir esta función
     def _check_media_presence(self, element):
         """Verifica si un tweet tiene medios adjuntos"""
         try:
@@ -268,20 +267,20 @@ class TwitterScraper:
                 last_position = current_position
                 
                 # Buscar tweets con JavaScript (más confiable)
-                tweet_elements = self.driver.execute_script("""
-                    return Array.from(document.querySelectorAll('article[data-testid="tweet"], div[data-testid="cellInnerDiv"] article'))
-                        .filter(el => el.offsetParent !== null)  // Solo elementos visibles
-                        .map(el => {
-                            const rect = el.getBoundingClientRect();
-                            return {
-                                element: el,
-                                top: rect.top,
-                                bottom: rect.bottom
-                            };
-                        })
-                        .filter(item => item.bottom > 0 && item.top < window.innerHeight)  // Solo elementos en vista
-                        .map(item => item.element);
-                """)
+                tweet_elements = self.driver.execute_script(
+                    "return Array.from(document.querySelectorAll('article[data-testid=\"tweet\"], div[data-testid=\"cellInnerDiv\"] article'))"
+                    ".filter(el => el.offsetParent !== null)"  # Solo elementos visibles
+                    ".map(el => {"
+                    "    const rect = el.getBoundingClientRect();"
+                    "    return {"
+                    "        element: el,"
+                    "        top: rect.top,"
+                    "        bottom: rect.bottom"
+                    "    };"
+                    "})"
+                    ".filter(item => item.bottom > 0 && item.top < window.innerHeight)"  # Solo elementos en vista
+                    ".map(item => item.element);"
+                )
                 
                 if not tweet_elements:
                     Logger.warning("No se encontraron tweets visibles. Haciendo scroll...")
@@ -321,75 +320,74 @@ class TwitterScraper:
     def extract_tweet_with_js(self, tweet_element):
         """Extrae datos de un tweet usando JavaScript directo (más robusto)"""
         try:
-            tweet_data = self.driver.execute_script("""
-                const tweet = arguments[0];
+            tweet_data = self.driver.execute_script(
+                "const tweet = arguments[0];"
                 
-                // Extraer texto
-                const textEl = tweet.querySelector('div[data-testid="tweetText"]');
-                const text = textEl ? textEl.innerText : '';
+                # Extraer texto
+                "const textEl = tweet.querySelector('div[data-testid=\"tweetText\"]');"
+                "const text = textEl ? textEl.innerText : '';"
                 
-                // Extraer URL
-                let url = '';
-                const linkEls = tweet.querySelectorAll('a[href*="/status/"]');
-                for (const link of linkEls) {
-                    if (link.href.includes('/status/')) {
-                        url = link.href;
-                        break;
-                    }
-                }
+                # Extraer URL
+                "let url = '';"
+                "const linkEls = tweet.querySelectorAll('a[href*=\"/status/\"]');"
+                "for (const link of linkEls) {"
+                "    if (link.href.includes('/status/')) {"
+                "        url = link.href;"
+                "        break;"
+                "    }"
+                "}"
                 
-                // Extraer fecha
-                let date = '';
-                const timeEl = tweet.querySelector('time');
-                if (timeEl) {
-                    date = timeEl.getAttribute('datetime') || timeEl.innerText;
-                }
+                # Extraer fecha
+                "let date = '';"
+                "const timeEl = tweet.querySelector('time');"
+                "if (timeEl) {"
+                "    date = timeEl.getAttribute('datetime') || timeEl.innerText;"
+                "}"
                 
-                // Extraer métricas - SELECTORES ACTUALIZADOS
-                const metrics = {
-                    replies: '0',
-                    retweets: '0',
-                    likes: '0',
-                    views: '0'
-                };
+                # Extraer métricas - SELECTORES ACTUALIZADOS
+                "const metrics = {"
+                "    replies: '0',"
+                "    retweets: '0',"
+                "    likes: '0',"
+                "    views: '0'"
+                "};"
                 
-                // Buscar contenedor de métricas
-                const metricsContainer = tweet.querySelector('div[role="group"]') || 
-                                    tweet.querySelector('div[data-testid="reply"]')?.closest('div');
+                # Buscar contenedor de métricas
+                "const metricsContainer = tweet.querySelector('div[role=\"group\"]') || "
+                "                        tweet.querySelector('div[data-testid=\"reply\"]')?.closest('div');"
                 
-                if (metricsContainer) {
-                    // Nuevos selectores para métricas
-                    const replyEl = metricsContainer.querySelector('[data-testid="reply"] span');
-                    const retweetEl = metricsContainer.querySelector('[data-testid="retweet"] span');
-                    const likeEl = metricsContainer.querySelector('[data-testid="like"] span');
-                    const viewEl = metricsContainer.querySelector('[aria-label*="view"] span');
-                    
-                    if (replyEl) metrics.replies = replyEl.innerText.trim();
-                    if (retweetEl) metrics.retweets = retweetEl.innerText.trim();
-                    if (likeEl) metrics.likes = likeEl.innerText.trim();
-                    if (viewEl) metrics.views = viewEl.innerText.trim();
-                }
+                "if (metricsContainer) {"
+                # Nuevos selectores para métricas
+                "    const replyEl = metricsContainer.querySelector('[data-testid=\"reply\"] span');"
+                "    const retweetEl = metricsContainer.querySelector('[data-testid=\"retweet\"] span');"
+                "    const likeEl = metricsContainer.querySelector('[data-testid=\"like\"] span');"
+                "    const viewEl = metricsContainer.querySelector('[aria-label*=\"view\"] span');"
                 
-                // Extraer usuario
-                const userEl = tweet.querySelector('div[data-testid="User-Name"]');
-                const username = userEl ? userEl.querySelector('span:first-child').innerText : '';
-                const handle = userEl ? userEl.querySelector('span[data-testid="User-Username"]').innerText : '';
+                "    if (replyEl) metrics.replies = replyEl.innerText.trim();"
+                "    if (retweetEl) metrics.retweets = retweetEl.innerText.trim();"
+                "    if (likeEl) metrics.likes = likeEl.innerText.trim();"
+                "    if (viewEl) metrics.views = viewEl.innerText.trim();"
+                "}"
                 
-                // Verificar medios
-                const hasMedia = tweet.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoComponent"]') !== null;
-                const mediaCount = tweet.querySelectorAll('div[data-testid="tweetPhoto"], div[data-testid="videoComponent"]').length;
+                # Extraer usuario
+                "const userEl = tweet.querySelector('div[data-testid=\"User-Name\"]');"
+                "const username = userEl ? userEl.querySelector('span:first-child').innerText : '';"
+                "const handle = userEl ? userEl.querySelector('span[data-testid=\"User-Username\"]').innerText : '';"
                 
-                return {
-                    text: text,
-                    url: url,
-                    date: date,
-                    username: username,
-                    handle: handle,
-                    metrics: metrics,
-                    hasMedia: hasMedia,
-                    mediaCount: mediaCount
-                };
-            """, tweet_element)
+                # Verificar medios
+                "const hasMedia = tweet.querySelector('div[data-testid=\"tweetPhoto\"], div[data-testid=\"videoComponent\"]') !== null;"
+                "const mediaCount = tweet.querySelectorAll('div[data-testid=\"tweetPhoto\"], div[data-testid=\"videoComponent\"]').length;"
+                
+                "return {"
+                "    text: text,"
+                "    url: url,"
+                "    date: date,"
+                "    username: username,"
+                "    handle: handle,"
+                "    metrics: metrics,"
+                "    hasMedia: hasMedia,"
+                "    mediaCount: mediaCount"
+                "};", tweet_element)
             
             if not tweet_data:
                 return None
@@ -417,52 +415,51 @@ class TwitterScraper:
     def _extract_replies_with_js(self, tweet_element):
         """Extrae respuestas usando JavaScript para mayor confiabilidad"""
         try:
-            replies = self.driver.execute_script("""
-                const tweet = arguments[0];
-                const replies = {};
+            replies = self.driver.execute_script(
+                "const tweet = arguments[0];"
+                "const replies = {};"
                 
-                // Buscar botón de "Mostrar respuestas" y hacer clic
-                const showRepliesBtn = tweet.querySelector('div[role="button"][aria-expanded="false"] span');
-                if (showRepliesBtn && (showRepliesBtn.innerText.includes('Show replies') || 
-                                    showRepliesBtn.innerText.includes('Mostrar respuestas'))) {
-                    showRepliesBtn.click();
-                    // Pequeña espera para que carguen las respuestas
-                    await new Promise(resolve => setTimeout(resolve, 800));
-                }
+                # Buscar botón de "Mostrar respuestas" y hacer clic
+                "const showRepliesBtn = tweet.querySelector('div[role=\"button\"][aria-expanded=\"false\"] span');"
+                "if (showRepliesBtn && (showRepliesBtn.innerText.includes('Show replies') || "
+                "                       showRepliesBtn.innerText.includes('Mostrar respuestas'))) {"
+                "    showRepliesBtn.click();"
+                # Pequeña espera para que carguen las respuestas
+                "    await new Promise(resolve => setTimeout(resolve, 800));"
+                "}"
                 
-                // Buscar respuestas
-                const replyElements = tweet.querySelectorAll('div[data-testid="cellInnerDiv"] article');
+                # Buscar respuestas
+                "const replyElements = tweet.querySelectorAll('div[data-testid=\"cellInnerDiv\"] article');"
                 
-                replyElements.forEach((reply, index) => {
-                    // Saltar el tweet principal
-                    if (reply.closest('div[data-testid="tweet"]') === tweet) return;
-                    
-                    const userEl = reply.querySelector('div[data-testid="User-Name"] span');
-                    const handleEl = reply.querySelector('div[data-testid="User-Name"] span[data-testid="User-Username"]');
-                    const textEl = reply.querySelector('div[data-testid="tweetText"]');
-                    const dateEl = reply.querySelector('time');
-                    const likeEl = reply.querySelector('[data-testid="like"] span');
-                    
-                    const replyData = {
-                        usuario: userEl ? userEl.innerText : `unknown_${index}`,
-                        handle: handleEl ? handleEl.innerText : `@unknown_${index}`,
-                        texto: textEl ? textEl.innerText : '',
-                        fecha: dateEl ? dateEl.getAttribute('datetime') : '',
-                        likes: likeEl ? likeEl.innerText.trim() : '0',
-                        tiene_media: reply.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoComponent"]') !== null
-                    };
-                    
-                    replies[`reply_${index}`] = replyData;
-                });
+                "replyElements.forEach((reply, index) => {"
+                # Saltar el tweet principal
+                "    if (reply.closest('div[data-testid=\"tweet\"]') === tweet) return;"
                 
-                return replies;
-            """, tweet_element)
+                "    const userEl = reply.querySelector('div[data-testid=\"User-Name\"] span');"
+                "const handleEl = reply.querySelector('div[data-testid=\"User-Name\"] span[data-testid=\"User-Username\"]');"
+                "const textEl = reply.querySelector('div[data-testid=\"tweetText\"]');"
+                "const dateEl = reply.querySelector('time');"
+                "const likeEl = reply.querySelector('[data-testid=\"like\"] span');"
+                
+                "const replyData = {"
+                "    usuario: userEl ? userEl.innerText : `unknown_${index}`,"
+                "    handle: handleEl ? handleEl.innerText : `@unknown_${index}`,"
+                "    texto: textEl ? textEl.innerText : '',"
+                "    fecha: dateEl ? dateEl.getAttribute('datetime') : '',"
+                "    likes: likeEl ? likeEl.innerText.trim() : '0',"
+                "    tiene_media: reply.querySelector('div[data-testid=\"tweetPhoto\"], div[data-testid=\"videoComponent\"]') !== null"
+                "};"
+                
+                "replies[`reply_${index}`] = replyData;"
+                "});"
+                
+                "return replies;", tweet_element)
             
             return replies or {}
         except Exception as e:
             Logger.error(f"Error extrayendo respuestas con JS: {e}")
             return {}
-    
+
     def search_tweets_by_date_range(self, username):
         """Usa la búsqueda avanzada para encontrar tweets en un rango de fechas"""
         try:
@@ -1238,7 +1235,7 @@ class TwitterScraper:
             except:
                 pass
                 
-            # 6. Verificar si hay medios (fotos/videos)
+            # 6. Verificar si hay medios adjuntos (fotos/videos)
             has_media = False
             media_count = 0
             
