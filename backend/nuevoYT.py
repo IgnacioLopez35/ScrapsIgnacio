@@ -20,7 +20,7 @@ MAX_VIDEOS_TO_CHECK = 100  # Máximo de videos a revisar para encontrar los que 
 VIDEOS_TO_SCRAPE = 50  # Número de videos a scrapear por canal que cumplan el filtro
 # Configuración global
 MAX_RETRIES = 2
-SCROLL_ATTEMPTS = 1
+SCROLL_ATTEMPTS = 2
 PAUSE_EVERY = 3
 # Lista de User-Agents para desktop
 agents = [
@@ -31,12 +31,12 @@ agents = [
 # Lista de canales a escrapear
 
 channels = [
-    "https://www.youtube.com/@platacard/videos",
-    "https://www.youtube.com/@klar_mx/videos",
+    #"https://www.youtube.com/@platacard/videos",
+    #"https://www.youtube.com/@klar_mx/videos",
     "https://www.youtube.com/@numexico/videos",
-    "https://www.youtube.com/@MercadoPago/videos",
-    "https://www.youtube.com/@stori_mx/videos",
-    "https://www.youtube.com/c/Ual%C3%A1M%C3%A9xico/videos"
+    #"https://www.youtube.com/@MercadoPago/videos",
+    #"https://www.youtube.com/@stori_mx/videos",
+    #"https://www.youtube.com/c/Ual%C3%A1M%C3%A9xico/videos"
 ]
 
 class YouTubeScraper:
@@ -253,7 +253,7 @@ def process_channel(channel_url, service):
     
     # Configurar opciones del navegador
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new") #---------------
+    #chrome_options.add_argument("--headless=new") #---------------
     chrome_options.add_argument(f"user-agent={random.choice(agents)}")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])

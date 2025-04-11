@@ -30,12 +30,13 @@ agents = [
 
 # Canales
 channels = [
-    #"https://www.youtube.com/@platacard/videos",
+    "https://www.youtube.com/@platacard/videos",
     #"https://www.youtube.com/@klar_mx/videos",
-    "https://www.youtube.com/@numexico/videos"
+    #"https://www.youtube.com/@numexico/videos",
     #"https://www.youtube.com/@MercadoPago/videos",
     #"https://www.youtube.com/@stori_mx/videos",
-    #"https://www.youtube.com/c/Ual%C3%A1M%C3%A9xico/videos"
+    #"https://www.youtube.com/c/Ual%C3%A1M%C3%A9xico/videos",
+    #"https://www.youtube.com/results?search_query=israel+war+"
 ]
 
 class YouTubeScraper:
@@ -441,7 +442,7 @@ def process_channel_modified(channel_url, service):
     data = []
     
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
+    #chrome_options.add_argument("--headless=new")
     chrome_options.add_argument(f"user-agent={random.choice(agents)}")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])

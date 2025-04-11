@@ -11,6 +11,9 @@ from pathlib import Path
 from fake_useragent import UserAgent
 from datetime import datetime, timedelta
 import undetected_chromedriver as uc
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+import re 
 
 # Deshabilitar verificación SSL para evitar problemas de certificados
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -22,7 +25,7 @@ sys.path.append(ruta_raiz)
 
 # Intentar importar módulos propios
 try:
-    from agents import agents
+    from modules.agents import agents
 except ImportError:
     pass  # Silenciar error si no existe
 
@@ -51,24 +54,24 @@ X_PASS = "Sidoresilasisoln777"
 
 # Lista de usuarios a extraer
 USERS = [
-    "plata_card"  # Reemplaza con el usuario que quieras extraer
+    "soynumx"  # Reemplaza con el usuario que quieras extraer
 ]
-USER = "plata_card"
+USER = "soynumx"
 
 # Filtros avanzados
 START_DATE = "01-01-2025"  # Formato DD-MM-YYYY, tweets a partir de esta fecha
-END_DATE = "30-03-2025"    # Formato DD-MM-YYYY, tweets hasta esta fecha
-MAX_TWEETS = 100           # Número máximo de tweets a extraer
-NUM_SCROLLS = 15           # Reducido para optimizar
+END_DATE = "02-04-2025"    # Formato DD-MM-YYYY, tweets hasta esta fecha
+MAX_TWEETS = 500           # Número máximo de tweets a extraer
+NUM_SCROLLS = 30           # Reducido para optimizar
 SAVE_SCREENSHOTS = False   # Desactivado por defecto para mejorar velocidad
 BROWSER_TYPE = 'Chrome'    # Tipo de navegador: 'Chrome' únicamente para uc
-ENABLE_HEADLESS = False    # Activar modo headless (sin interfaz gráfica)
+ENABLE_HEADLESS = True    # Activar modo headless (sin interfaz gráfica)
 MAX_RETRIES = 3            # Número máximo de reintentos para operaciones que pueden fallar
 LOAD_REPLIES = True        # Establece a False para una extracción super rápida sin respuestas
 
 # Optimización de tiempos
-SCROLL_DELAY_MIN = 0.3     # Reducido de 0.5 a 0.3
-SCROLL_DELAY_MAX = 0.7     # Reducido de 1.0 a 0.7
+SCROLL_DELAY_MIN = 1.5     # Reducido de 0.5 a 0.3
+SCROLL_DELAY_MAX = 3.0     # Reducido de 1.0 a 0.7
 CLICK_DELAY_MIN = 0.1      # Reducido de 0.2 a 0.1
 CLICK_DELAY_MAX = 0.3      # Reducido de 0.5 a 0.3
 WAIT_TIMEOUT = 3           # Reducido de 5 a 3 segundos
@@ -166,7 +169,1064 @@ class TwitterScraper:
             'likes': None
         }
         
-        self.selectors = TwitterScraper.get_updated_selectors()
+        # Diccionario con selectores actualizados para Twitter/X
+        self.selectors = {
+            # Selectores para tweets
+            "tweets": [
+                "//article[@data-testid='tweet']",
+                "//div[@data-testid='cellInnerDiv']//article[contains(@tabindex, '-1')]",
+                "//div[@role='article']"
+            ],
+            "tweet_content": [
+                ".//div[@data-testid='tweetText']",
+                ".//div[@lang]",
+                ".//div[contains(@class, 'tweet-text')]"
+            ],
+            # Selectores para fechas de tweets
+            "tweet_dates": [
+                ".//time",
+                ".//a[contains(@href, '/status/')]//time"
+            ],
+            # Selectores para métricas (retweets, likes, etc.)
+            "metrics": [
+                ".//div[@role='group']//span[@data-testid='app-text-transition-container']",
+                ".//div[@data-testid='reply']//span",
+                ".//div[@data-testid='retweet']//span",
+                ".//div[@data-testid='like']//span",
+                "//*[@id='id__34a7a38t7l8']/div[4]/a/div/div[2]/span/span"
+            ],
+            # Selectores para respuestas
+            "replies": [
+                ".//article[@data-testid='tweet'][contains(@tabindex, '-1')]",
+                ".//div[@data-testid='cellInnerDiv']//article[not(@data-testid='tweet')]"
+            ],
+            # Selectores para expandir respuestas
+            "expand_replies": [
+                ".//div[@role='button'][contains(text(), 'Show replies') or contains(text(), 'Mostrar respuestas')]",
+                ".//div[@role='button'][contains(text(), 'View more replies') or contains(text(), 'Ver más respuestas')]",
+                ".//div[@role='button'][contains(text(), 'Show more replies') or contains(text(), 'Mostrar más respuestas')]"
+            ],
+            # Selectores para "Ver más" en tweets largos
+            "see_more": [
+                ".//div[@role='button'][contains(text(), 'Show more') or contains(text(), 'Mostrar más')]",
+                ".//span[contains(text(), 'Show more') or contains(text(), 'Mostrar más')]"
+            ],
+            # Selectores para medios (imágenes, videos)
+            "media": [
+                ".//div[@data-testid='tweetPhoto']",
+                ".//div[@data-testid='videoComponent']",
+                ".//div[contains(@aria-label, 'Image')]",
+                ".//div[contains(@aria-label, 'Video')]"
+            ]
+        }
+
+    def _check_media_presence(self, element):
+        """Verifica si un tweet tiene medios adjuntos"""
+        try:
+            media_selectors = [
+                ".//div[@data-testid='tweetPhoto']",
+                ".//div[@data-testid='videoComponent']",
+                ".//div[contains(@aria-label, 'Image')]",
+                ".//div[contains(@aria-label, 'Video')]"
+            ]
+            
+            for selector in media_selectors:
+                if element.find_elements(By.XPATH, selector):
+                    return True
+            return False
+        except:
+            return False
+    
+    def optimized_tweet_extraction(self, username):
+        """
+        Método optimizado para extraer tweets con enfoque específico en
+        encontrar y extraer tweets de enero 2025.
+        """
+        Logger.info(f"Iniciando extracción optimizada de tweets para el periodo {START_DATE} a {END_DATE}")
+        
+        tweets_data = []
+        earliest_date_found = None
+        reached_january = False  # Flag para enero
+        
+        # Convertir la fecha de inicio a un objeto datetime
+        if isinstance(START_DATE, str):
+            target_earliest_date = datetime.strptime(START_DATE, "%d-%m-%Y")
+        else:
+            target_earliest_date = START_DATE
+        
+        # FASE 1: BÚSQUEDA DIRECTA DE ENERO
+        # Intentar primero una búsqueda directa por fecha para enero
+        Logger.info("Fase 1: Intentando búsqueda directa de tweets de enero 2025...")
+        
+        # Construir URL de búsqueda específica para enero
+        january_search_url = f"https://twitter.com/search?q=from%3A{username}%20since%3A2025-01-01%20until%3A2025-02-01&src=typed_query"
+        self.driver.get(january_search_url)
+        time.sleep(5)  # Esperar a que cargue la página
+        
+        # Verificar si hay tweets de enero
+        january_tweets = self._get_visible_tweets()
+        if january_tweets:
+            Logger.success("¡Búsqueda directa de enero exitosa! Procesando tweets...")
+            # Extraer estos tweets primero
+            for tweet_element in january_tweets:
+                tweet_data = self._process_tweet(tweet_element)
+                if tweet_data:
+                    tweets_data.append(tweet_data)
+                    # Actualizar fecha más temprana
+                    try:
+                        current_date = self._parse_tweet_date(tweet_data["fecha_tweet"])
+                        if current_date and (earliest_date_found is None or current_date < earliest_date_found):
+                            earliest_date_found = current_date
+                            Logger.info(f"Fecha más temprana encontrada en búsqueda directa: {earliest_date_found.strftime('%Y-%m-%d')}")
+                    except:
+                        pass
+            
+            # Si encontramos tweets de enero, marcar bandera
+            if earliest_date_found and earliest_date_found.month == 1:
+                reached_january = True
+                Logger.success(f"¡Encontrados {len(tweets_data)} tweets de enero mediante búsqueda directa!")
+        else:
+            Logger.warning("No se encontraron tweets de enero mediante búsqueda directa.")
+        
+        # FASE 2: PROCEDIMIENTO NORMAL PARA EL RESTO DEL PERIODO
+        # Navegar al perfil sin cambiar a vista cronológica
+        self._navigate_to_user(username)
+        
+        # Esperar a que cargue la página
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//article[@data-testid='tweet']"))
+            )
+        except TimeoutException:
+            Logger.error("No se cargaron los tweets en el tiempo esperado")
+            if not tweets_data:  # Si no tenemos tweets de enero, devolver lista vacía
+                return tweets_data
+        
+        # Realizar pre-carga
+        self._perform_preload(username)
+        
+        # Volver al inicio de la página para comenzar la extracción desde el principio
+        self.driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(3)
+        
+        # Iniciar extracción sistemática
+        Logger.info(f"Iniciando extracción sistemática con 200 scrolls...")
+        
+        # Variables para la extracción
+        processed_urls = set()  # Para evitar procesar tweets duplicados
+        extraction_scrolls = 200  # Número extendido de scrolls para la extracción
+        continuous_empty_scrolls = 0  # Contador de scrolls consecutivos sin tweets
+        
+        for scroll_attempt in range(extraction_scrolls):
+            # Verificar si hay tweets visibles
+            tweet_elements = self._get_visible_tweets()
+            
+            if not tweet_elements:
+                Logger.warning("No se encontraron tweets visibles. Haciendo scroll...")
+                self.driver.execute_script("window.scrollBy(0, 500);")  # Scroll más pequeño
+                time.sleep(1.5)
+                continuous_empty_scrolls += 1
+                
+                # Si hay muchos scrolls vacíos consecutivos, probar estrategias diferentes
+                if continuous_empty_scrolls == 5:
+                    Logger.warning("Muchos scrolls sin tweets. Intentando scroll más grande...")
+                    self.driver.execute_script("window.scrollBy(0, 1000);")
+                    time.sleep(2.5)
+                elif continuous_empty_scrolls == 10:
+                    Logger.warning("Posible sección sin tweets. Haciendo scroll grande...")
+                    self.driver.execute_script("window.scrollBy(0, 2000);")
+                    time.sleep(3)
+                elif continuous_empty_scrolls >= 15:
+                    Logger.warning("Demasiados scrolls sin tweets. Saltando sección...")
+                    self.driver.execute_script("window.scrollBy(0, 3000);")
+                    time.sleep(4)
+                    continuous_empty_scrolls = 0  # Resetear contador
+                
+                continue
+            
+            # Resetear contador de scrolls vacíos
+            continuous_empty_scrolls = 0
+            
+            # Procesar tweets visibles
+            new_tweets_this_scroll = 0
+            
+            for tweet_element in tweet_elements:
+                try:
+                    # Obtener URL del tweet para identificarlo de forma única
+                    tweet_url = self._get_tweet_url(tweet_element)
+                    if not tweet_url or tweet_url in processed_urls:
+                        continue
+                    
+                    # Marcar como procesado
+                    processed_urls.add(tweet_url)
+                    
+                    # Procesar el tweet
+                    tweet_data = self._process_tweet(tweet_element)
+                    if tweet_data:
+                        tweets_data.append(tweet_data)
+                        new_tweets_this_scroll += 1
+                        
+                        # Actualizar fecha más temprana
+                        try:
+                            current_date = self._parse_tweet_date(tweet_data["fecha_tweet"])
+                            if current_date and (earliest_date_found is None or current_date < earliest_date_found):
+                                earliest_date_found = current_date
+                                Logger.info(f"Fecha más temprana encontrada hasta ahora: {earliest_date_found.strftime('%Y-%m-%d')}")
+                                
+                                # Si alcanzamos enero, actualizar bandera
+                                if current_date.month == 1 and current_date.year == 2025:
+                                    reached_january = True
+                        except:
+                            pass
+                    
+                    # Verificar si alcanzamos el límite
+                    if len(tweets_data) >= MAX_TWEETS:
+                        Logger.info(f"Se alcanzó el límite de {MAX_TWEETS} tweets")
+                        break
+                except Exception as e:
+                    Logger.error(f"Error procesando tweet: {str(e)[:100]}")
+                    continue
+            
+            # Si alcanzamos el límite, salir
+            if len(tweets_data) >= MAX_TWEETS:
+                break
+            
+            Logger.info(f"Scroll {scroll_attempt+1}: Añadidos {new_tweets_this_scroll} tweets (Total: {len(tweets_data)})")
+            
+            # Hacer un scroll más pequeño y pausado para capturar todos los tweets
+            self.driver.execute_script("window.scrollBy(0, 500);")
+            time.sleep(random.uniform(1.0, 1.8))
+            
+            # Cada 20 scrolls, hacer una pausa más larga
+            if scroll_attempt % 20 == 19:
+                Logger.info("Pausa para asegurar carga completa...")
+                time.sleep(3)
+                
+                # Y cada 40 scrolls, verificar si necesitamos scroll más grande
+                if scroll_attempt % 40 == 39 and new_tweets_this_scroll == 0:
+                    Logger.warning("Muchos scrolls sin nuevos tweets. Probando scroll más grande...")
+                    self.driver.execute_script("window.scrollBy(0, 2000);")
+                    time.sleep(4)
+            
+            # Si ya alcanzamos enero y llevamos varios scrolls sin tweets nuevos, podemos terminar
+            if reached_january and scroll_attempt > 100 and new_tweets_this_scroll == 0:
+                Logger.success("Ya se alcanzaron tweets de enero y no hay más tweets nuevos. Finalizando extracción.")
+                break
+        
+        # FASE 3: SI AÚN NO HEMOS ALCANZADO ENERO, INTENTAR BÚSQUEDA ESPECÍFICA DE NUEVO
+        if not reached_january and earliest_date_found and earliest_date_found.month > 1:
+            Logger.warning(f"No se alcanzaron todos los tweets de enero. Intentando búsqueda directa específica...")
+            
+            # Construir URL de búsqueda específica para enero de nuevo
+            january_search_url = f"https://twitter.com/search?q=from%3A{username}%20since%3A2025-01-01%20until%3A2025-02-01&src=typed_query"
+            self.driver.get(january_search_url)
+            time.sleep(5)  # Esperar a que cargue la página
+            
+            # Hacer algunos scrolls para cargar más tweets
+            for _ in range(10):
+                self.driver.execute_script("window.scrollBy(0, 800);")
+                time.sleep(2)
+            
+            # Buscar y procesar tweets de enero
+            january_urls = set(processed_urls)  # Copiar las URLs ya procesadas
+            for _ in range(15):  # Intentar varios scrolls
+                january_tweets = self._get_visible_tweets()
+                
+                if january_tweets:
+                    for tweet_element in january_tweets:
+                        try:
+                            # Verificar si ya procesamos este tweet
+                            tweet_url = self._get_tweet_url(tweet_element)
+                            if not tweet_url or tweet_url in january_urls:
+                                continue
+                            
+                            # Marcar como procesado
+                            january_urls.add(tweet_url)
+                            
+                            # Procesar tweet
+                            tweet_data = self._process_tweet(tweet_element)
+                            if tweet_data:
+                                # Verificar si es de enero
+                                try:
+                                    tweet_date = self._parse_tweet_date(tweet_data["fecha_tweet"])
+                                    if tweet_date and tweet_date.month == 1 and tweet_date.year == 2025:
+                                        tweets_data.append(tweet_data)
+                                        Logger.success(f"¡Tweet adicional de enero encontrado: {tweet_date.strftime('%Y-%m-%d')}!")
+                                        reached_january = True
+                                        
+                                        # Actualizar fecha más temprana
+                                        if earliest_date_found is None or tweet_date < earliest_date_found:
+                                            earliest_date_found = tweet_date
+                                except:
+                                    continue
+                        except:
+                            continue
+                
+                # Scroll para buscar más
+                self.driver.execute_script("window.scrollBy(0, 800);")
+                time.sleep(2)
+        
+        # Mensaje final sobre el resultado
+        if reached_january:
+            Logger.success(f"¡Se encontraron tweets de enero! Tweet más antiguo: {earliest_date_found.strftime('%Y-%m-%d')}")
+        else:
+            Logger.warning(f"No se alcanzaron tweets de enero. Tweet más antiguo: {earliest_date_found.strftime('%Y-%m-%d') if earliest_date_found else 'N/A'}")
+        
+        return tweets_data
+    
+    def _perform_preload(self, username):
+        """Fase de pre-carga de tweets antiguos"""
+        Logger.info("Iniciando fase de pre-carga de tweets antiguos...")
+        
+        # Variables para la pre-carga
+        scroll_total = 60  # Número total de scrolls para pre-carga
+        wait_multiplier = 1.0  # Factor de multiplicación de tiempo de espera
+        last_height = self.driver.execute_script("return document.body.scrollHeight")
+        consecutive_same_height = 0
+        january_detected = False
+        
+        # Realizamos la pre-carga
+        for i in range(1, scroll_total + 1):
+            # Hacer scroll
+            self.driver.execute_script("window.scrollBy(0, 800);")
+            
+            # Espera dinámica: más larga después de varios scrolls para dar tiempo a cargar
+            wait_time = random.uniform(0.8, 1.5) * wait_multiplier
+            time.sleep(wait_time)
+            
+            # Cada 10 scrolls, aumentar el tiempo de espera
+            if i % 10 == 0:
+                wait_multiplier += 0.5  # Aumentar multiplicador de tiempo
+                Logger.info(f"Aumentando tiempo de espera por scroll a {wait_multiplier}x (scroll {i}/{scroll_total})")
+                
+                # Pausa más larga cada 10 scrolls para permitir carga completa
+                time.sleep(3.0)
+                
+                # Verificar si estamos llegando a enero
+                visible_tweets = self._get_visible_tweets()
+                if visible_tweets:
+                    for tweet in visible_tweets:
+                        try:
+                            date_element = tweet.find_element(By.XPATH, ".//time")
+                            if date_element:
+                                date_text = date_element.get_attribute("datetime")
+                                if date_text:
+                                    current_date = self._parse_tweet_date(date_text)
+                                    if current_date:
+                                        month = current_date.month
+                                        year = current_date.year
+                                        Logger.info(f"Tweet más antiguo visible: {current_date.strftime('%Y-%m-%d')}")
+                                        if year == 2025 and month == 1:
+                                            Logger.success(f"¡Se detectaron tweets de enero 2025 en pre-carga! ({current_date.strftime('%Y-%m-%d')})")
+                                            january_detected = True
+                        except:
+                            continue
+            
+            # Verificar si la altura ha cambiado
+            new_height = self.driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                consecutive_same_height += 1
+                
+                # Si la altura no cambia durante varios scrolls, intentar diferentes estrategias
+                if consecutive_same_height == 3:
+                    Logger.warning("Altura de página sin cambios. Intentando scroll más grande...")
+                    self.driver.execute_script("window.scrollBy(0, 1500);")
+                    time.sleep(2.5)
+                elif consecutive_same_height == 5:
+                    Logger.warning("Altura de página estancada. Intentando técnica de scroll múltiple...")
+                    for _ in range(3):
+                        self.driver.execute_script("window.scrollBy(0, 1000);")
+                        time.sleep(1.5)
+                    time.sleep(3)
+                elif consecutive_same_height >= 8:
+                    # Si después de muchos intentos no cambia, probablemente llegamos al final
+                    Logger.warning("No se detectan más tweets para cargar. Finalizando pre-carga.")
+                    break
+            else:
+                # Si la altura cambió, resetear contador
+                consecutive_same_height = 0
+                last_height = new_height
+            
+            # Mostrar progreso
+            if i % 5 == 0:
+                Logger.info(f"Pre-carga: scroll {i}/{scroll_total} completado")
+        
+        Logger.info(f"Pre-carga finalizada. Enero detectado: {'Sí' if january_detected else 'No'}")
+        return january_detected
+    
+    def _process_tweet(self, tweet_element):
+        """
+        Procesa un elemento de tweet y extrae todos sus datos
+        """
+        try:
+            # Obtener URL del tweet para identificarlo de forma única
+            tweet_url = self._get_tweet_url(tweet_element)
+            if not tweet_url:
+                return None
+            
+            # Extraer datos básicos del tweet
+            tweet_data = self._extract_tweet_data(tweet_element)
+            if not tweet_data:
+                return None
+                
+            # Verificar si está en el rango de fechas
+            if not self._tweet_in_date_range(tweet_data):
+                # Aún así, registramos la fecha para monitoreo
+                try:
+                    tweet_date = self._parse_tweet_date(tweet_data["fecha_tweet"])
+                    if tweet_date:
+                        Logger.info(f"Tweet fuera de rango: {tweet_date.strftime('%Y-%m-%d')}")
+                except:
+                    pass
+                return None
+            
+            # Extraer respuestas y métricas
+            if LOAD_REPLIES:
+                Logger.info(f"Extrayendo respuestas para tweet: {tweet_url}")
+                replies, metrics = self._extract_replies_with_js(tweet_element)
+                
+                # Update the tweet data with metrics
+                if metrics:
+                    tweet_data["retweets"] = metrics.get("retweets", "0")
+                    tweet_data["likes"] = metrics.get("likes", "0")
+                    tweet_data["respuestas_count"] = metrics.get("respuestas_count", "0")
+                    tweet_data["vistas"] = metrics.get("vistas", "0")
+                    
+                tweet_data["respuestas"] = replies
+            else:
+                tweet_data["respuestas"] = {}
+            
+            return tweet_data
+        except Exception as e:
+            Logger.error(f"Error procesando tweet: {str(e)[:100]}")
+            return None
+
+    
+    def _get_tweet_url(self, tweet_element):
+        """Extrae la URL de un tweet"""
+        try:
+            url_elements = tweet_element.find_elements(By.XPATH, ".//a[contains(@href, '/status/')]")
+            for url_elem in url_elements:
+                href = url_elem.get_attribute("href")
+                if href and "/status/" in href:
+                    return href
+        except:
+            pass
+        return None
+    
+    def extract_tweet_with_js(self, tweet_element):
+        """Extrae datos de un tweet usando JavaScript directo (más robusto)"""
+        try:
+            tweet_data = self.driver.execute_script(
+                """
+                const tweet = arguments[0];
+                
+                // Función para extraer texto seguro
+                function getText(element) {
+                    return element ? element.textContent.trim() : '';
+                }
+                
+                // Extraer texto - selector actualizado
+                const textEl = tweet.querySelector('div[data-testid="tweetText"], div[lang]');
+                const text = getText(textEl);
+                
+                // Extraer URL
+                let url = '';
+                const linkEl = tweet.querySelector('a[href*="/status/"]');
+                if (linkEl) url = linkEl.href;
+                
+                // Extraer fecha
+                let date = '';
+                const timeEl = tweet.querySelector('time');
+                if (timeEl) date = timeEl.getAttribute('datetime') || getText(timeEl);
+                
+                // Extraer usuario
+                const userEl = tweet.querySelector('div[data-testid="User-Name"]');
+                let username = '';
+                let handle = '';
+                
+                if (userEl) {
+                    const nameEl = userEl.querySelector('span:not([data-testid])');
+                    const handleEl = userEl.querySelector('span[data-testid="User-Username"]');
+                    
+                    username = getText(nameEl);
+                    handle = getText(handleEl);
+                }
+                
+                // Extraer métricas
+                const metrics = {
+                    replies: '0',
+                    retweets: '0',
+                    likes: '0',
+                    views: '0'
+                };
+                
+                // Selectores actualizados para métricas
+                const replyEl = tweet.querySelector('[data-testid="reply"] span');
+                const retweetEl = tweet.querySelector('[data-testid="retweet"] span');
+                const likeEl = tweet.querySelector('[data-testid="like"] span');
+                const viewEl = tweet.querySelector('[aria-label*="view"] span');
+                
+                if (replyEl) metrics.replies = getText(replyEl);
+                if (retweetEl) metrics.retweets = getText(retweetEl);
+                if (likeEl) metrics.likes = getText(likeEl);
+                if (viewEl) metrics.views = getText(viewEl);
+                
+                // Verificar medios
+                const mediaElements = tweet.querySelectorAll('div[data-testid="tweetPhoto"], div[data-testid="videoComponent"]');
+                const hasMedia = mediaElements.length > 0;
+                
+                return {
+                    text: text,
+                    url: url,
+                    date: date,
+                    username: username,
+                    handle: handle,
+                    metrics: metrics,
+                    hasMedia: hasMedia,
+                    mediaCount: mediaElements.length
+                };
+                """, tweet_element)
+            
+            if not tweet_data:
+                return None
+                
+            # Formatear los datos
+            return {
+                "url_tweet": tweet_data.get('url', ''),
+                "usuario": tweet_data.get('username', ''),
+                "handle": tweet_data.get('handle', ''),
+                "texto_tweet": tweet_data.get('text', ''),
+                "fecha_tweet": tweet_data.get('date', ''),
+                "retweets": tweet_data.get('metrics', {}).get('retweets', '0'),
+                "likes": tweet_data.get('metrics', {}).get('likes', '0'),
+                "respuestas_count": tweet_data.get('metrics', {}).get('replies', '0'),
+                "vistas": tweet_data.get('metrics', {}).get('views', '0'),
+                "tiene_media": "Sí" if tweet_data.get('hasMedia', False) else "No",
+                "cantidad_media": str(tweet_data.get('mediaCount', 0)),
+                "respuestas": self._extract_replies_with_js(tweet_element) if LOAD_REPLIES else {}
+            }
+            
+        except Exception as e:
+            Logger.error(f"Error extrayendo tweet con JS: {str(e)[:200]}")
+            return None
+        
+    def _extract_replies_with_js(self, tweet_element):
+        """
+        Enhanced method to extract replies from tweets by opening each tweet
+        and scrolling to reveal all comments
+        """
+        try:
+            # 1. Get tweet URL
+            tweet_url = None
+            try:
+                url_elements = tweet_element.find_elements(By.XPATH, ".//a[contains(@href, '/status/')]")
+                for url_elem in url_elements:
+                    href = url_elem.get_attribute("href")
+                    if href and "/status/" in href:
+                        tweet_url = href
+                        break
+            except Exception as e:
+                Logger.error(f"Error getting tweet URL: {str(e)[:100]}")
+                return {}
+                
+            if not tweet_url:
+                Logger.warning("No URL found for tweet, cannot extract replies")
+                return {}
+                
+            # 2. Open the tweet in current window
+            Logger.info(f"Opening tweet to extract comments: {tweet_url}")
+            current_url = self.driver.current_url
+            
+            # Navigate to tweet
+            self.driver.get(tweet_url)
+            time.sleep(3)  # Wait for page to load
+            
+            # 3. First, extract tweet metrics (retweets, likes, etc.) from the open tweet
+            metrics = self._extract_metrics_from_open_tweet()
+            
+            # Store metrics in the current tweet_data object
+            # We'll return to the calling function later
+            
+            # 4. Extract replies
+            replies = {}
+            
+            try:
+                # Wait for page to load
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//article[@data-testid='tweet']"))
+                )
+                
+                # 4.1 Scroll down a few times to reveal comments
+                for _ in range(3):
+                    self.driver.execute_script("window.scrollBy(0, 800);")
+                    time.sleep(1.5)
+                
+                # 4.2 Click "Show more replies" or similar buttons if present
+                show_more_selectors = [
+                    "//span[contains(text(), 'Show more replies')]",
+                    "//span[contains(text(), 'Mostrar más respuestas')]",
+                    "//div[@role='button'][contains(text(), 'Show')]",
+                    "//div[@role='button'][contains(., 'more repl')]"
+                ]
+                
+                for selector in show_more_selectors:
+                    try:
+                        buttons = self.driver.find_elements(By.XPATH, selector)
+                        for button in buttons[:2]:  # Limit to first 2 buttons to avoid endless clicking
+                            if button.is_displayed():
+                                Logger.info(f"Clicking 'Show more replies' button")
+                                button.click()
+                                time.sleep(2)
+                    except Exception as e:
+                        continue
+                
+                # 4.3 Get all reply elements with updated selectors
+                reply_selectors = [
+                    "//div[@data-testid='cellInnerDiv'][.//article[not(@data-testid='tweet')]]",
+                    "//div[contains(@class, 'css-1dbjc4n r-1udh08x')][.//article[not(@data-testid='tweet')]]",
+                    "//article[not(@data-testid='tweet')][.//div[@data-testid='User-Name']]"
+                ]
+                
+                reply_elements = []
+                for selector in reply_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.XPATH, selector)
+                        if elements:
+                            reply_elements = elements
+                            Logger.info(f"Found {len(elements)} potential replies using selector")
+                            break
+                    except:
+                        continue
+                
+                # If we still don't have replies, try a more generic approach
+                if not reply_elements:
+                    try:
+                        # Get the main tweet first
+                        main_tweet = self.driver.find_element(By.XPATH, "//article[@data-testid='tweet']")
+                        
+                        # Find all articles that come after the main tweet
+                        all_articles = self.driver.find_elements(By.XPATH, "//article")
+                        reply_elements = [article for article in all_articles if article != main_tweet]
+                        Logger.info(f"Found {len(reply_elements)} potential replies using fallback method")
+                    except:
+                        pass
+                
+                # 4.4 Process each reply with more robust extraction
+                for index, reply in enumerate(reply_elements):
+                    try:
+                        reply_data = {}
+                        
+                        # 4.4.1 Extract user info
+                        try:
+                            # Try primary selector for username
+                            user_elements = reply.find_elements(By.XPATH, 
+                                ".//div[@data-testid='User-Name']//span[not(@data-testid='User-Username')]")
+                            
+                            if user_elements:
+                                reply_data["usuario"] = user_elements[0].text.strip()
+                            else:
+                                # Fallback to a more generic selector
+                                name_elements = reply.find_elements(By.XPATH, 
+                                    ".//div[contains(@class, 'css-1dbjc4n r-1awozwy')]//span[not(contains(@data-testid, 'User-Username'))]")
+                                if name_elements:
+                                    reply_data["usuario"] = name_elements[0].text.strip()
+                                else:
+                                    reply_data["usuario"] = f"unknown_user_{index}"
+                            
+                            # Handle extraction
+                            handle_elements = reply.find_elements(By.XPATH, 
+                                ".//span[@data-testid='User-Username']")
+                            if handle_elements:
+                                reply_data["handle"] = handle_elements[0].text.strip()
+                            else:
+                                reply_data["handle"] = f"@unknown_{index}"
+                        except Exception as e:
+                            Logger.warning(f"Error extracting user info: {str(e)[:100]}")
+                            reply_data["usuario"] = f"unknown_user_{index}"
+                            reply_data["handle"] = f"@unknown_{index}"
+                        
+                        # 4.4.2 Extract reply text with multiple selector attempts
+                        try:
+                            text_selectors = [
+                                ".//div[@data-testid='tweetText']",
+                                ".//div[@lang]",
+                                ".//div[contains(@class, 'css-1dbjc4n')][./span]"
+                            ]
+                            
+                            reply_text = ""
+                            for selector in text_selectors:
+                                text_elements = reply.find_elements(By.XPATH, selector)
+                                if text_elements:
+                                    reply_text = text_elements[0].text.strip()
+                                    if reply_text:
+                                        break
+                            
+                            reply_data["texto"] = reply_text
+                        except Exception as e:
+                            Logger.warning(f"Error extracting reply text: {str(e)[:100]}")
+                            reply_data["texto"] = ""
+                        
+                        # 4.4.3 Extract date
+                        try:
+                            time_elements = reply.find_elements(By.XPATH, ".//time")
+                            if time_elements:
+                                reply_date = time_elements[0].get_attribute("datetime")
+                                if not reply_date:
+                                    reply_date = time_elements[0].text.strip()
+                            else:
+                                # Try alternate selectors for date
+                                date_elements = reply.find_elements(By.XPATH, 
+                                    ".//span[contains(@class, 'css-1dbjc4n')][contains(text(), ':')]")
+                                if date_elements:
+                                    reply_date = date_elements[0].text.strip()
+                                else:
+                                    reply_date = ""
+                            
+                            reply_data["fecha"] = reply_date
+                        except Exception as e:
+                            Logger.warning(f"Error extracting date: {str(e)[:100]}")
+                            reply_data["fecha"] = ""
+                        
+                        # 4.4.4 Extract likes using multiple selectors
+                        try:
+                            like_selectors = [
+                                ".//div[@data-testid='like']//span",
+                                ".//div[contains(@aria-label, 'Like')]//span",
+                                ".//div[contains(@aria-label, 'Me gusta')]//span"
+                            ]
+                            
+                            likes = "0"
+                            for selector in like_selectors:
+                                like_elements = reply.find_elements(By.XPATH, selector)
+                                if like_elements:
+                                    likes = like_elements[0].text.strip() or "0"
+                                    break
+                            
+                            reply_data["likes"] = likes
+                        except Exception as e:
+                            Logger.warning(f"Error extracting likes: {str(e)[:100]}")
+                            reply_data["likes"] = "0"
+                        
+                        # 4.4.5 Check for media
+                        try:
+                            media_selectors = [
+                                ".//div[@data-testid='tweetPhoto']",
+                                ".//div[@data-testid='videoComponent']",
+                                ".//div[contains(@style, 'background-image')]"
+                            ]
+                            
+                            media_count = 0
+                            for selector in media_selectors:
+                                media_elements = reply.find_elements(By.XPATH, selector)
+                                media_count += len(media_elements)
+                            
+                            reply_data["tiene_media"] = media_count > 0
+                            reply_data["media_count"] = media_count
+                        except Exception as e:
+                            Logger.warning(f"Error detecting media: {str(e)[:100]}")
+                            reply_data["tiene_media"] = False
+                            reply_data["media_count"] = 0
+                        
+                        # Add to replies dictionary
+                        replies[f"reply_{index}"] = reply_data
+                    except Exception as e:
+                        Logger.warning(f"Error processing reply {index}: {str(e)[:100]}")
+                        continue
+                
+                Logger.info(f"Extracted {len(replies)} replies successfully")
+            except Exception as e:
+                Logger.error(f"Error extracting replies: {str(e)[:200]}")
+            
+            # 5. Return to the original URL
+            self.driver.get(current_url)
+            time.sleep(2)
+            
+            # Return both the metrics and replies
+            return replies, metrics
+        except Exception as e:
+            Logger.error(f"Error in _extract_replies_with_js: {str(e)[:200]}")
+            
+            # Ensure we return to the original URL
+            try:
+                if self.driver.current_url != current_url:
+                    self.driver.get(current_url)
+                    time.sleep(2)
+            except:
+                pass
+                
+            return {}, {}
+    
+    def _extract_metrics_from_open_tweet(self):
+        """
+        Extract metrics (retweets, likes, etc.) from an open tweet page
+        with multiple selector attempts
+        """
+        metrics = {
+            "retweets": "0",
+            "likes": "0",
+            "respuestas_count": "0",
+            "vistas": "0"
+        }
+        
+        try:
+            # 1. Metrics container - multiple attempts with different selectors
+            metrics_selectors = [
+                "//article[@data-testid='tweet']//div[@role='group']",
+                "//div[@data-testid='cellInnerDiv'][1]//div[@role='group']",
+                "//article[1]//div[@role='group']"
+            ]
+            
+            metrics_container = None
+            for selector in metrics_selectors:
+                try:
+                    containers = self.driver.find_elements(By.XPATH, selector)
+                    if containers and containers[0].is_displayed():
+                        metrics_container = containers[0]
+                        break
+                except:
+                    continue
+            
+            if not metrics_container:
+                # Try JavaScript approach to find metrics
+                try:
+                    metrics_js = self.driver.execute_script("""
+                        const metricsData = {};
+                        
+                        // Try to find retweets
+                        const retweetEls = document.querySelectorAll('[data-testid="retweet"] span');
+                        if (retweetEls.length > 0) metricsData.retweets = retweetEls[0].textContent.trim();
+                        
+                        // Try to find likes
+                        const likeEls = document.querySelectorAll('[data-testid="like"] span');
+                        if (likeEls.length > 0) metricsData.likes = likeEls[0].textContent.trim();
+                        
+                        // Try to find replies
+                        const replyEls = document.querySelectorAll('[data-testid="reply"] span');
+                        if (replyEls.length > 0) metricsData.replies = replyEls[0].textContent.trim();
+                        
+                        // Try to find views
+                        const viewEls = document.querySelectorAll('a[href*="/analytics"] span');
+                        if (viewEls.length > 0) metricsData.views = viewEls[0].textContent.trim();
+                        
+                        return metricsData;
+                    """)
+                    
+                    if metrics_js:
+                        metrics["retweets"] = metrics_js.get("retweets", "0") or "0"
+                        metrics["likes"] = metrics_js.get("likes", "0") or "0"
+                        metrics["respuestas_count"] = metrics_js.get("replies", "0") or "0"
+                        metrics["vistas"] = metrics_js.get("views", "0") or "0"
+                except:
+                    pass
+                
+                return metrics
+            
+            # 2. Extract specific metrics with multiple selector attempts
+            
+            # 2.1 Retweets
+            retweet_selectors = [
+                ".//div[@data-testid='retweet']//span",
+                ".//div[contains(@aria-label, 'Retweet')]//span",
+                ".//a[contains(@href, '/retweets')]//span"
+            ]
+            
+            for selector in retweet_selectors:
+                try:
+                    elements = metrics_container.find_elements(By.XPATH, selector)
+                    if elements and elements[0].is_displayed():
+                        metrics["retweets"] = elements[0].text.strip() or "0"
+                        break
+                except:
+                    continue
+            
+            # 2.2 Likes
+            like_selectors = [
+                ".//div[@data-testid='like']//span",
+                ".//div[contains(@aria-label, 'Like')]//span",
+                ".//a[contains(@href, '/likes')]//span"
+            ]
+            
+            for selector in like_selectors:
+                try:
+                    elements = metrics_container.find_elements(By.XPATH, selector)
+                    if elements and elements[0].is_displayed():
+                        metrics["likes"] = elements[0].text.strip() or "0"
+                        break
+                except:
+                    continue
+            
+            # 2.3 Replies
+            reply_selectors = [
+                ".//div[@data-testid='reply']//span",
+                ".//div[contains(@aria-label, 'Reply')]//span",
+                ".//a[contains(@href, '#replies')]//span"
+            ]
+            
+            for selector in reply_selectors:
+                try:
+                    elements = metrics_container.find_elements(By.XPATH, selector)
+                    if elements and elements[0].is_displayed():
+                        metrics["respuestas_count"] = elements[0].text.strip() or "0"
+                        break
+                except:
+                    continue
+            
+            # 2.4 Views
+            view_selectors = [
+                ".//a[contains(@href, '/analytics')]//span",
+                ".//div[contains(@aria-label, 'View')]//span",
+                ".//div[contains(text(), 'Views')]//following-sibling::div//span"
+            ]
+            
+            for selector in view_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)  # Search in whole page
+                    if elements and elements[0].is_displayed():
+                        metrics["vistas"] = elements[0].text.strip() or "0"
+                        break
+                except:
+                    continue
+                    
+        except Exception as e:
+            Logger.error(f"Error extracting metrics: {str(e)[:100]}")
+        
+        return metrics
+
+    def search_tweets_by_date_range(self, username):
+        """
+        Improved method to search tweets within a specific date range that ensures
+        we get chronological results instead of Twitter's algorithmic feed
+        """
+        try:
+            # Format dates for the URL
+            if isinstance(START_DATE, str):
+                since_date = datetime.strptime(START_DATE, "%d-%m-%Y").strftime("%Y-%m-%d")
+            else:
+                since_date = START_DATE.strftime("%Y-%m-%d")
+                
+            if isinstance(END_DATE, str):
+                until_date = datetime.strptime(END_DATE, "%d-%m-%Y").strftime("%Y-%m-%d")
+            else:
+                until_date = END_DATE.strftime("%Y-%m-%d")
+            
+            # Important: Use the advanced search with latest filter for chronological results
+            # The 'f=live' parameter is critical to get chronological order
+            search_url = f"https://twitter.com/search?q=from%3A{username}%20since%3A{since_date}%20until%3A{until_date}&src=typed_query&f=live"
+            
+            Logger.info(f"Buscando tweets por rango de fechas: {since_date} hasta {until_date} (orden cronológico)")
+            self.driver.get(search_url)
+            time.sleep(5)  # Wait for page to load
+            
+            # Verify search was applied correctly
+            current_url = self.driver.current_url.lower()
+            if f"from:{username}".lower() in current_url and "since:" in current_url and "f=live" in current_url:
+                Logger.success("Búsqueda cronológica aplicada correctamente")
+                return True
+            elif f"from:{username}".lower() in current_url and "since:" in current_url:
+                # If f=live wasn't applied, manually set to chronological view
+                Logger.warning("Orden cronológico no aplicado, intentando ajustar manualmente...")
+                try:
+                    # Try to find the chronological filter option and click it
+                    filter_buttons = self.driver.find_elements(By.XPATH, 
+                        "//div[@role='tab'][contains(., 'Latest') or contains(., 'Recientes')]")
+                    
+                    if filter_buttons:
+                        for button in filter_buttons:
+                            if button.is_displayed():
+                                button.click()
+                                time.sleep(2)
+                                Logger.success("Vista cronológica habilitada manualmente")
+                                return True
+                    
+                    # Try to modify the URL directly
+                    chronological_url = current_url + "&f=live"
+                    self.driver.get(chronological_url)
+                    time.sleep(3)
+                    if "f=live" in self.driver.current_url.lower():
+                        Logger.success("Vista cronológica habilitada vía URL")
+                        return True
+                except Exception as e:
+                    Logger.error(f"Error activando vista cronológica: {e}")
+            
+            Logger.warning("No se pudo establecer búsqueda cronológica, usando navegación alternativa")
+            return False
+        except Exception as e:
+            Logger.error(f"Error en búsqueda por fechas: {e}")
+            return False
+    
+    def _navigate_to_user(self, username):
+        """
+        Navigate to user profile and set chronological view
+        """
+        Logger.info(f"Navegando al perfil de: @{username}")
+        try:
+            # Navigate directly to the profile with chronological view
+            self.driver.get(f"https://twitter.com/{username}")
+            self._human_delay(1.5, 2)
+            
+            # Check if we're on the right page
+            current_url = self.driver.current_url.lower()
+            if username.lower() in current_url:
+                Logger.success(f"Navegación al perfil de @{username} exitosa")
+                
+                # Try to find and click "Tweets" or "Tweets & replies" tab 
+                # to ensure chronological view
+                try:
+                    tab_selectors = [
+                        "//a[contains(@href, '/tweets')]",
+                        "//span[text()='Tweets']//ancestor::a",
+                        "//div[@role='tab'][contains(., 'Tweets')]"
+                    ]
+                    
+                    for selector in tab_selectors:
+                        tabs = self.driver.find_elements(By.XPATH, selector)
+                        for tab in tabs:
+                            if tab.is_displayed():
+                                tab.click()
+                                time.sleep(2)
+                                Logger.info("Pestaña 'Tweets' seleccionada para vista cronológica")
+                                break
+                except Exception as e:
+                    Logger.warning(f"No se pudo seleccionar pestaña de tweets: {e}")
+                
+                return True
+            else:
+                Logger.warning(f"La URL actual no contiene el nombre de usuario: {current_url}")
+                
+                # Try to navigate through search
+                self.driver.get(f"https://twitter.com/search?q=%40{username}&src=typed_query&f=user")
+                self._human_delay(1.5, 2)
+                
+                # Look for matching user results
+                user_result_selectors = [
+                    f"//span[contains(text(), '@{username}')]//ancestor::a",
+                    f"//a[contains(@href, '/{username}')]",
+                    "//div[@data-testid='UserCell']//a"
+                ]
+                
+                for selector in user_result_selectors:
+                    try:
+                        user_links = self.driver.find_elements(By.XPATH, selector)
+                        for link in user_links:
+                            if link.is_displayed() and username.lower() in link.get_attribute("href").lower():
+                                self._human_click(link)
+                                self._human_delay(1.5, 2)
+                                
+                                # Verify we're now on the profile
+                                current_url = self.driver.current_url.lower()
+                                if username.lower() in current_url:
+                                    Logger.success(f"Navegación al perfil de @{username} exitosa mediante búsqueda")
+                                    return True
+                    except:
+                        continue
+                
+                Logger.error(f"No se pudo navegar al perfil de @{username}")
+                return False
+        
+        except Exception as e:
+            Logger.error(f"Error navegando al perfil: {e}")
+            return False
 
     def _setup_screenshot_dir(self):
         """Crea directorio para capturas de pantalla"""
@@ -195,81 +1255,22 @@ class TwitterScraper:
             return None
             
     def _setup_driver(self):
-        """
-        Configura el driver con opciones anti-detección optimizadas.
-        """
-        # Configuración del navegador
         options = uc.ChromeOptions()
-        
-        # Protección anti-detección
         options.add_argument("--disable-blink-features=AutomationControlled")
-        
-        # Optimización de rendimiento
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--start-maximized")
         
-        # Modo headless (si está activado)
-        if ENABLE_HEADLESS:
-            options.add_argument("--headless=new")
-            
-        # Bloqueo de notificaciones y popups
-        options.add_argument("--disable-popup-blocking")
-        options.add_argument("--disable-notifications")
-
-        # User-Agent realista
-        user_agent = self._random_user_agent()
-        options.add_argument(f"--user-agent={user_agent}")
-
-        # Prevención de fugas WebRTC
-        options.add_argument("--disable-webrtc")
-
-        # Configuraciones específicas para Twitter/X
-        prefs = {
-            "profile.default_content_setting_values.notifications": 2,  # Bloquear notificaciones
-            "profile.managed_default_content_settings.images": 1,       # Cargar imágenes
-            "profile.managed_default_content_settings.javascript": 1,   # Habilitar JavaScript
-            "profile.managed_default_content_settings.plugins": 1,      # Habilitar plugins
-            "profile.managed_default_content_settings.popups": 2,       # Bloquear popups
-            "profile.managed_default_content_settings.geolocation": 2,  # Bloquear geolocalización
-            "profile.managed_default_content_settings.media_stream": 2, # Bloquear acceso a cámara/micro
-            "profile.default_content_setting_values.cookies": 1,        # Aceptar cookies
-            "profile.block_third_party_cookies": False                  # Permitir cookies de terceros
-        }
-        options.add_experimental_option("prefs", prefs)
-
-        # Usar perfil persistente para evitar login frecuente
-        profile_dir = os.path.join(os.path.expanduser("~"), "twitter-scraper-profile")
-        options.add_argument(f"--user-data-dir={profile_dir}")
-
-        # Configurar proxy con autenticación (opcional)
-        #try:
-            #from proxy_auth import ProxyAuth
-            #PROXY_HOST = "gate.smartproxy.com"
-            #PROXY_PORT = "10001"
-            #PROXY_USER = "sp03mahcda"
-            #PROXY_PASS = "ax4as2g5_S2HHrmIjl"
-            
-            #proxy = ProxyAuth(PROXY_HOST, PROXY_PORT, PROXY_USER, PROXY_PASS)
-            #options.add_extension(proxy.get_proxy_extension())
-        #except Exception as e:
-            #Logger.warning(f"Proxy no configurado: {e}")
-
-        # Inicializar el driver con undetected chromedriver
         try:
-            driver = uc.Chrome(options=options, use_subprocess=True)
-            driver.set_page_load_timeout(60)
-            driver.implicitly_wait(2)  # Reducido para mejor rendimiento
-            
-            # Aplicar scripts de evasión
-            self._apply_stealth_js(driver)
-            
-            Logger.success("Driver inicializado correctamente")
+            driver = uc.Chrome(
+                service=Service(ChromeDriverManager().install()),
+                options=options,
+                version_main=134
+            )
             return driver
         except Exception as e:
             Logger.fatal_error(f"Error inicializando driver: {e}")
             raise
+
 
     def _apply_stealth_js(self, driver):
         """Aplica scripts JavaScript para evadir detección."""
@@ -526,34 +1527,178 @@ class TwitterScraper:
 
     def _scroll_with_pause(self, times=10, pause_every=5):
         """
-        Realiza scroll con patrones optimizados para mayor velocidad.
+        Scroll optimizado para cargar todo el contenido de forma más controlada,
+        evitando "saltos" grandes en la cronología y llegando más lejos en el tiempo
         """
-        if times <= 0:
-            return
-            
-        Logger.info(f"Realizando {times} scrolls para cargar contenido...")
+        Logger.info(f"Realizando {times} scrolls iniciales para cargar contenido...")
+        
+        last_height = self.driver.execute_script("return document.body.scrollHeight")
+        last_tweet_dates = []  # Guardamos las fechas de los últimos tweets para detectar saltos
         
         for i in range(1, times + 1):
-            # Scroll con altura variable pero mayor para cubrir más contenido
-            scroll_amount = random.randint(700, 1000)
-            self.driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+            # Scroll de forma más suave y controlada (distancia limitada)
+            self.driver.execute_script("window.scrollBy(0, 800);")
+            time.sleep(random.uniform(1.5, 2.5))  # Espera más larga para cargar
             
-            # Mostrar progreso cada 5 scrolls
-            if i % 5 == 0 or i == times:
-                Logger.info(f"Scroll {i}/{times}")
+            # Verificar si hemos saltado en el tiempo comprobando las fechas de los tweets visibles
+            visible_tweets = self._get_visible_tweets()
+            if visible_tweets:
+                # Extraer fechas de los tweets visibles
+                current_dates = []
+                for tweet in visible_tweets[:3]:  # Revisar solo los primeros tweets visibles
+                    try:
+                        date_element = tweet.find_element(By.XPATH, ".//time")
+                        if date_element:
+                            date_text = date_element.get_attribute("datetime")
+                            if date_text:
+                                current_dates.append(date_text)
+                    except:
+                        continue
+                
+                # Verificar si hay un salto grande en las fechas
+                if current_dates and last_tweet_dates:
+                    try:
+                        # Convertir a objetos datetime para comparar
+                        latest_previous = self._parse_tweet_date(last_tweet_dates[0])
+                        earliest_current = self._parse_tweet_date(current_dates[-1])
+                        
+                        if latest_previous and earliest_current:
+                            # Calcular diferencia en días
+                            date_diff = abs((latest_previous - earliest_current).days)
+                            
+                            # Si hay un salto grande (más de 7 días), hacer scroll más pequeño
+                            if date_diff > 7:
+                                Logger.warning(f"Detectado salto de {date_diff} días en tweets. Ajustando scroll...")
+                                # Scroll hacia arriba un poco para "retroceder"
+                                self.driver.execute_script("window.scrollBy(0, -400);")
+                                time.sleep(1.5)
+                                
+                                # Luego scroll más pequeño
+                                self.driver.execute_script("window.scrollBy(0, 300);")
+                                time.sleep(2)
+                    except Exception as e:
+                        Logger.warning(f"Error comprobando salto de fechas: {str(e)[:100]}")
+                
+                # Actualizar fechas para la próxima iteración
+                if current_dates:
+                    last_tweet_dates = current_dates
             
-            # Pausa entre scrolls (optimizada y reducida)
-            delay = max(0.3, SCROLL_DELAY_MIN * 0.7)
-            time.sleep(delay)
+            # Calcular nueva altura y comparar
+            new_height = self.driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                # Si no aumentó la altura, hacer scrolls más pequeños
+                for _ in range(3):
+                    self.driver.execute_script("window.scrollBy(0, 250);")
+                    time.sleep(1)
+                    new_height = self.driver.execute_script("return document.body.scrollHeight")
+                    if new_height > last_height:
+                        break
+                
+                if new_height == last_height:
+                    # Intentar una última estrategia con scroll más agresivo
+                    Logger.info("Intentando scroll agresivo para cargar más contenido...")
+                    for _ in range(3):
+                        self.driver.execute_script("window.scrollBy(0, 1000);")
+                        time.sleep(1.5)
+                    
+                    new_height = self.driver.execute_script("return document.body.scrollHeight")
+                    if new_height == last_height:
+                        Logger.info("No hay más contenido al hacer scroll")
+                        break
+                    
+            last_height = new_height
             
-            # Pausas cada cierto número de scrolls (reducidas)
-            if i % pause_every == 0 and random.random() < 0.5:  # 50% de probabilidad
-                # Micro-scroll aleatorio para simular comportamiento natural
-                self.driver.execute_script("window.scrollBy(0, -80);")
-                time.sleep(0.1)
-                self.driver.execute_script("window.scrollBy(0, 80);")
-                time.sleep(0.1)
+            # Mostrar progreso
+            if i % 3 == 0:
+                Logger.info(f"Scroll {i}/{times} - Altura actual: {new_height}px")
+            
+            # Pausa aleatoria cada ciertos scrolls para parecer humano
+            if i % pause_every == 0:
+                time.sleep(random.uniform(0.8, 1.8))
     
+    def _parse_tweet_date(self, date_str):
+        """
+        Parsea una fecha de tweet en formato ISO a un objeto datetime
+        """
+        try:
+            if "T" in date_str:
+                # Manejar diferentes formatos ISO (con/sin Z, con/sin milisegundos)
+                iso_date = date_str.replace("Z", "")
+                if "+" in iso_date:
+                    # Remover la parte de zona horaria
+                    iso_date = iso_date.split("+")[0]
+                
+                # Parsear la fecha sin zona horaria
+                if "." in iso_date:  # Tiene milisegundos
+                    return datetime.strptime(iso_date, "%Y-%m-%dT%H:%M:%S.%f")
+                else:
+                    return datetime.strptime(iso_date, "%Y-%m-%dT%H:%M:%S")
+        except Exception as e:
+            Logger.warning(f"Error parseando fecha: {str(e)[:100]}")
+        
+        return None
+    
+
+    
+    def _get_visible_tweets(self):
+        """
+        Obtiene los tweets actualmente visibles en la pantalla,
+        con mejor detección y visualización
+        """
+        try:
+            # Buscar tweets con múltiples selectores
+            tweet_selectors = [
+                "//article[@data-testid='tweet']",
+                "//div[@data-testid='cellInnerDiv']//article",
+                "//div[@data-testid='tweet']"
+            ]
+            
+            all_tweets = []
+            for selector in tweet_selectors:
+                try:
+                    tweets = self.driver.find_elements(By.XPATH, selector)
+                    if tweets:
+                        all_tweets.extend(tweets)
+                except:
+                    continue
+            
+            if not all_tweets:
+                return []
+            
+            # Filtrar tweets únicos (puede haber duplicados por diferentes selectores)
+            unique_tweets = []
+            tweet_ids = set()
+            
+            for tweet in all_tweets:
+                try:
+                    # Intentar identificar por URL o ID
+                    tweet_url = self._get_tweet_url(tweet)
+                    if tweet_url and tweet_url not in tweet_ids:
+                        tweet_ids.add(tweet_url)
+                        
+                        # Verificar si está visible
+                        is_visible = self.driver.execute_script("""
+                            const rect = arguments[0].getBoundingClientRect();
+                            return (
+                                rect.top >= -300 &&  // Permitir tweets parcialmente visibles arriba
+                                rect.left >= 0 &&
+                                rect.bottom <= (window.innerHeight + 300) &&  // Permitir tweets parcialmente visibles abajo
+                                rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+                            );
+                        """, tweet)
+                        
+                        if is_visible:
+                            unique_tweets.append(tweet)
+                except:
+                    continue
+                    
+            return unique_tweets
+        except Exception as e:
+            Logger.warning(f"Error obteniendo tweets visibles: {str(e)[:100]}")
+            return []
+
+
+
     def _scroll_for_more_content(self):
         """Scroll optimizado para cargar más contenido"""
         try:
@@ -663,7 +1808,119 @@ class TwitterScraper:
         except:
             return "tweet_" + str(random.randint(10000, 99999))
             
-    
+    def _extract_tweets_one_by_one(self, username):
+        """
+        Extrae tweets de forma individual con precisión optimizada.
+        """
+        Logger.info("Iniciando extracción tweet por tweet (método acelerado)")
+        
+        # Lista para almacenar los tweets extraídos
+        tweets_data = []
+        tweets_processed = 0
+        
+        # Scrolls iniciales para cargar algunos tweets (más rápidos)
+        self._scroll_with_pause(4, pause_every=2)
+        
+        # Selectores más precisos para encontrar tweets
+        improved_selectors = [
+            "//article[@data-testid='tweet']",
+            "//div[@data-testid='cellInnerDiv']//article",
+            "//div[@data-testid='tweetText']//ancestor::article"
+        ]
+        
+        # Variable para controlar la paginación
+        last_tweet_id = None
+        max_extraction_attempts = 8  # Reducido para mayor velocidad
+        consecutive_empty_scrolls = 0
+        
+        for attempt in range(max_extraction_attempts):
+            # Encontrar tweets visibles de forma eficiente
+            visible_tweets = []
+            for selector in improved_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    if elements:
+                        visible_tweets = [e for e in elements if e.is_displayed()]
+                        if visible_tweets:
+                            break
+                except:
+                    continue
+            
+            if not visible_tweets:
+                Logger.warning("No se encontraron tweets visibles. Haciendo scroll adicional.")
+                self._scroll_with_pause(2, pause_every=1)
+                consecutive_empty_scrolls += 1
+                # Si no encontramos tweets después de varios intentos, salir
+                if consecutive_empty_scrolls >= 3:
+                    break
+                continue
+            else:
+                consecutive_empty_scrolls = 0
+            
+            # Procesar cada tweet visible de forma eficiente
+            new_tweets_found = False
+            for tweet_element in visible_tweets:
+                try:
+                    # Obtener ID del tweet para verificar si ya lo procesamos
+                    current_tweet_id = self._get_tweet_id(tweet_element)
+                    
+                    # Si ya procesamos este tweet, continuar con el siguiente
+                    if current_tweet_id == last_tweet_id:
+                        continue
+                        
+                    # Guardar este ID para no reprocesarlo
+                    last_tweet_id = current_tweet_id
+                    new_tweets_found = True
+                    
+                    # Scroll más rápido para centrar el tweet
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'auto'});", tweet_element)
+                    time.sleep(0.2)  # Reducido significativamente
+                    
+                    # Extraer datos del tweet
+                    tweet_data = self._extract_tweet_data(tweet_element)
+                    
+                    # Verificar si el tweet está en el rango de fechas
+                    if tweet_data and self._tweet_in_date_range(tweet_data):
+                        # Expandir respuestas solo si es necesario
+                        if LOAD_REPLIES:
+                            self._expand_replies(tweet_element)
+                            replies = self._extract_replies(tweet_element)
+                            tweet_data["respuestas"] = replies
+                        else:
+                            tweet_data["respuestas"] = {}
+                        
+                        # Añadir a la lista de tweets
+                        tweets_data.append(tweet_data)
+                        tweets_processed += 1
+                        
+                        # Mostrar progreso menos frecuentemente
+                        if tweets_processed % 10 == 0:
+                            Logger.success(f"Procesados {tweets_processed} tweets válidos")
+                        
+                        # Verificar si alcanzamos el límite
+                        if tweets_processed >= MAX_TWEETS:
+                            Logger.info(f"Se alcanzó el límite de {MAX_TWEETS} tweets. Deteniendo extracción.")
+                            break
+                except Exception as e:
+                    continue
+            
+            # Si alcanzamos el límite de tweets, salir
+            if tweets_processed >= MAX_TWEETS:
+                break
+                
+            # Si no encontramos nuevos tweets, hacer más scroll
+            if not new_tweets_found:
+                self._scroll_with_pause(2, pause_every=1)
+            else:
+                # Hacer scroll normal para cargar más tweets
+                self._scroll_for_more_content()
+                time.sleep(0.5)  # Optimizado
+            
+            # Si ya tenemos suficientes tweets, salir antes
+            if len(tweets_data) >= MAX_TWEETS / 2 and attempt > 2:
+                break
+        
+        return tweets_data
         
     def _extract_tweet_data(self, tweet_element):
         """Extrae datos de un tweet con selectores de alto rendimiento"""
@@ -870,7 +2127,7 @@ class TwitterScraper:
             except:
                 pass
                 
-            # 6. Verificar si hay medios (fotos/videos)
+            # 6. Verificar si hay medios adjuntos (fotos/videos)
             has_media = False
             media_count = 0
             
@@ -959,264 +2216,248 @@ class TwitterScraper:
 
     def _extract_replies(self, tweet_element):
         """
-        Extrae respuestas a un tweet.
+        Extrae respuestas a un tweet con selectores actualizados y manejo robusto.
+        Devuelve un diccionario con las respuestas estructuradas.
         """
-        if not LOAD_REPLIES:
-            return {}
-                
         replies_data = {}
         
+        if not LOAD_REPLIES:
+            return replies_data
+            
         try:
-            # Buscar respuestas
+            # Selectores actualizados para encontrar elementos de respuestas
             reply_elements = self._find_element_with_multiple_xpaths(
-                tweet_element, self.selectors["replies"], single=False)
-                
+                tweet_element, [
+                    ".//div[@data-testid='reply']//ancestor::div[@data-testid='tweet']",
+                    ".//div[contains(@data-testid, 'reply')]//ancestor::article",
+                    ".//div[@role='article' and contains(@tabindex, '-1')]",
+                    ".//div[@data-testid='cellInnerDiv']//article[contains(@tabindex, '-1')]"
+                ], single=False)
+            
             if not reply_elements:
                 return replies_data
-            
-            # Limitar a solo 10 respuestas para optimización
-            reply_elements = reply_elements[:10]
+                
+            # Limitar el número de respuestas para optimizar el rendimiento
+            max_replies = 20  # Puedes ajustar este valor según necesidades
+            reply_elements = reply_elements[:max_replies]
             
             for i, reply in enumerate(reply_elements):
                 try:
-                    # Extraer nombre de usuario con caché
-                    username = "Usuario desconocido"
-                    user_selectors = [
+                    # 1. Extraer usuario que respondió
+                    user_element = self._find_element_with_multiple_xpaths(reply, [
                         ".//div[@data-testid='User-Name']//span[not(contains(@data-testid, 'UserScreenName'))]",
-                        ".//span[@data-testid='User-Name']"
-                    ]
+                        ".//span[@data-testid='User-Name']",
+                        ".//span[contains(@class, 'username')]"
+                    ])
+                    username = user_element.text if user_element else f"unknown_user_{i}"
                     
-                    # Intentar primero con el selector cacheado
-                    if self._reply_selector_cache['user']:
-                        try:
-                            user_elements = reply.find_elements(By.XPATH, self._reply_selector_cache['user'])
-                            for user_elem in user_elements:
-                                if user_elem.is_displayed() and user_elem.text and len(user_elem.text.strip()) > 1:
-                                    username = user_elem.text.strip()
-                                    break
-                        except:
-                            pass
+                    # 2. Extraer handle (@usuario)
+                    handle_element = self._find_element_with_multiple_xpaths(reply, [
+                        ".//div[@data-testid='User-Name']//span[@data-testid='UserScreenName']",
+                        ".//span[contains(@class, 'usertag')]",
+                        ".//span[contains(text(), '@')]"
+                    ])
+                    user_handle = handle_element.text if handle_element else f"@unknown_{i}"
                     
-                    # Si no funciona el caché, probar otros selectores
-                    if username == "Usuario desconocido":
-                        for selector in user_selectors:
-                            try:
-                                user_elements = reply.find_elements(By.XPATH, selector)
-                                for user_elem in user_elements:
-                                    if user_elem.is_displayed() and user_elem.text and len(user_elem.text.strip()) > 1:
-                                        username = user_elem.text.strip()
-                                        self._reply_selector_cache['user'] = selector
-                                        break
-                                if username != "Usuario desconocido":
-                                    break
-                            except:
-                                continue
-                    
-                    # Extraer handle (@usuario)
-                    user_handle = "No disponible"
-                    handle_selectors = [
-                        ".//div[@data-testid='User-Name']//span[@data-testid='User-Username']",
-                        ".//span[@data-testid='User-Username']"
-                    ]
-                    
-                    for selector in handle_selectors:
-                        try:
-                            handle_elements = reply.find_elements(By.XPATH, selector)
-                            for handle_elem in handle_elements:
-                                if handle_elem.is_displayed() and handle_elem.text:
-                                    user_handle = handle_elem.text.strip()
-                                    break
-                            if user_handle != "No disponible":
-                                break
-                        except:
-                            continue
-                    
-                    # Extraer texto de la respuesta con caché
-                    reply_text = "No disponible"
-                    text_selectors = [
+                    # 3. Extraer texto de la respuesta
+                    text_element = self._find_element_with_multiple_xpaths(reply, [
                         ".//div[@data-testid='tweetText']",
-                        ".//div[@lang and @dir='auto']"
-                    ]
+                        ".//div[@lang and @dir='auto']",
+                        ".//div[contains(@class, 'tweet-text')]"
+                    ])
+                    reply_text = text_element.text if text_element else ""
                     
-                    # Intentar primero con el selector cacheado
-                    if self._reply_selector_cache['text']:
-                        try:
-                            text_elements = reply.find_elements(By.XPATH, self._reply_selector_cache['text'])
-                            for text_elem in text_elements:
-                                if text_elem.is_displayed() and text_elem.text and len(text_elem.text.strip()) > 1:
-                                    reply_text = text_elem.text.strip()
-                                    break
-                        except:
-                            pass
-                    
-                    # Si no funciona el caché, probar otros selectores
-                    if reply_text == "No disponible":
-                        for selector in text_selectors:
-                            try:
-                                text_elements = reply.find_elements(By.XPATH, selector)
-                                for text_elem in text_elements:
-                                    if text_elem.is_displayed() and text_elem.text and len(text_elem.text.strip()) > 1:
-                                        reply_text = text_elem.text.strip()
-                                        self._reply_selector_cache['text'] = selector
-                                        break
-                                if reply_text != "No disponible":
-                                    break
-                            except:
-                                continue
-                    
-                    # Extraer fecha de la respuesta
-                    reply_date = "No disponible"
-                    date_selectors = [
+                    # 4. Extraer fecha de la respuesta
+                    date_element = self._find_element_with_multiple_xpaths(reply, [
                         ".//time",
                         ".//a[contains(@href, '/status/')]//time"
-                    ]
+                    ])
+                    reply_date = date_element.get_attribute("datetime") if date_element else ""
                     
-                    for selector in date_selectors:
-                        try:
-                            date_elements = reply.find_elements(By.XPATH, selector)
-                            for date_elem in date_elements:
-                                # Verificar atributos primero
-                                for attr in ["datetime", "title"]:
-                                    date_value = date_elem.get_attribute(attr)
-                                    if date_value and len(date_value) > 2:
-                                        reply_date = date_value
-                                        break
-                                
-                                # Si no hay atributo con la fecha, usar el texto
-                                if reply_date == "No disponible" and date_elem.text and len(date_elem.text) > 1:
-                                    reply_date = date_elem.text.strip()
-                                
-                                if reply_date != "No disponible":
-                                    break
-                            
-                            if reply_date != "No disponible":
-                                break
-                        except:
-                            continue
-
-                    # Extraer likes de la respuesta
-                    reply_likes = "0"
-                    like_selectors = [
-                        ".//div[contains(@aria-label, 'like') or contains(@aria-label, 'Like')]//span[@data-testid='app-text-transition-container']"
-                    ]
+                    # 5. Extraer métricas de la respuesta (likes)
+                    likes_element = self._find_element_with_multiple_xpaths(reply, [
+                        ".//div[contains(@aria-label, 'Like') or contains(@aria-label, 'Me gusta')]//span",
+                        ".//div[@data-testid='like']//span",
+                        ".//span[contains(@class, 'like-count')]"
+                    ])
+                    reply_likes = likes_element.text if likes_element else "0"
                     
-                    for selector in like_selectors:
-                        try:
-                            like_elements = reply.find_elements(By.XPATH, selector)
-                            for like_elem in like_elements:
-                                if like_elem.is_displayed() and like_elem.text:
-                                    reply_likes = like_elem.text.strip() or "0"
-                                    break
-                            if reply_likes != "0":
-                                break
-                        except:
-                            continue
-                    
-                    # Verificar si hay imagen/video en la respuesta
+                    # 6. Verificar si tiene medios adjuntos
                     has_media = False
-                    try:
-                        media_selectors = [
-                            ".//div[@data-testid='tweetPhoto']",
-                            ".//div[@data-testid='videoComponent']"
-                        ]
-                        
-                        for selector in media_selectors:
-                            media_elements = reply.find_elements(By.XPATH, selector)
-                            if media_elements and any(img.is_displayed() for img in media_elements):
-                                has_media = True
-                                break
-                    except:
-                        pass
+                    media_elements = self._find_element_with_multiple_xpaths(reply, [
+                        ".//div[@data-testid='tweetPhoto']",
+                        ".//div[@data-testid='videoComponent']",
+                        ".//div[contains(@aria-label, 'Image') or contains(@aria-label, 'Imagen')]",
+                        ".//div[contains(@aria-label, 'Video')]"
+                    ], single=False)
+                    has_media = len(media_elements) > 0
                     
-                    # Guardar respuesta en el formato adecuado
-                    reply_key = f"{username}_{user_handle}_{i}"  # Prevenir duplicados con índice
-                    reply_data = {
-                        "usuario": username,
-                        "handle": user_handle,
-                        "texto": reply_text,
+                    # 7. Construir estructura de datos de la respuesta
+                    reply_key = f"reply_{i}_{username[:20]}"
+                    replies_data[reply_key] = {
+                        "usuario": username.strip(),
+                        "handle": user_handle.strip(),
+                        "texto": reply_text.replace("\n", " ").strip(),
                         "fecha": reply_date,
-                        "likes": reply_likes
+                        "likes": reply_likes,
+                        "tiene_media": has_media,
+                        "media_count": len(media_elements) if has_media else 0
                     }
                     
-                    if has_media:
-                        reply_data["media"] = True
-                        
-                    replies_data[reply_key] = reply_data
-                    
                 except Exception as e:
+                    Logger.warning(f"Error extrayendo respuesta {i}: {str(e)[:100]}")
                     continue
-            
-            return replies_data
-            
+                    
         except Exception as e:
-            Logger.error(f"Error extrayendo respuestas: {e}")
-            return replies_data
+            Logger.error(f"Error en _extract_replies: {str(e)[:200]}")
+            self.save_screenshot("extract_replies_error")
+        
+        return replies_data
     
     def _tweet_in_date_range(self, tweet_data):
         """
-        Verifica si un tweet está dentro del rango de fechas configurado.
+        Mejorado para verificar con mayor precisión si un tweet está dentro del rango de fechas
+        configurado, con mejor manejo de formatos de fecha.
+        
+        Args:
+            tweet_data (dict): Diccionario con los datos del tweet, debe contener 'fecha_tweet'
+        
+        Returns:
+            bool: True si el tweet está en el rango, False si está fuera
         """
         if "fecha_tweet" not in tweet_data or not tweet_data["fecha_tweet"]:
-            return True  # Si no hay fecha, asumimos que está en rango
-            
-        fecha_texto = tweet_data["fecha_tweet"]
+            return False  # Rechazamos tweets sin fecha
         
-        # Optimización: Verificar primero si es una fecha reciente
-        # Si encontramos términos de fechas relativas recientes, asumimos que está en el rango
-        relative_terms = ["now", "ahora", "min", "mins", "h", "hour", "hours", "hora", "horas", 
-                        "yesterday", "ayer", "today", "hoy", "sec", "segundo", "moment", "momento"]
-        if any(term in fecha_texto.lower() for term in relative_terms):
-            return True
-            
-        tweet_date = None
+        fecha_texto = tweet_data["fecha_tweet"].strip()
+        if not fecha_texto:
+            return False
         
-        # Intentar extraer fecha con método optimizado
+        # Log para debugging
+        Logger.info(f"Verificando fecha de tweet: {fecha_texto}")
+        
+        # Convertir fechas de rango si son strings
+        local_start_date = None
+        local_end_date = None
+        
+        if isinstance(START_DATE, str):
+            local_start_date = datetime.strptime(START_DATE, "%d-%m-%Y")
+        else:
+            local_start_date = START_DATE
+        
+        if isinstance(END_DATE, str):
+            local_end_date = datetime.strptime(END_DATE, "%d-%m-%Y")
+        else:
+            local_end_date = END_DATE
+        
+        # 1. Intentar parsear fecha ISO (formato más común)
         try:
-            # Twitter a menudo usa formato ISO en el atributo datetime
-            if "T" in fecha_texto and ":" in fecha_texto:
-                # Formato ISO (2023-01-15T14:30:00.000Z)
-                tweet_date = datetime.fromisoformat(fecha_texto.replace("Z", "+00:00"))
-            
-            # Formato común en Twitter UI (Jan 15, 2023)
-            elif len(fecha_texto.split()) == 3 and "," in fecha_texto:
-                try:
-                    # Intentar método rápido para este formato específico
-                    tweet_date = datetime.strptime(fecha_texto, "%b %d, %Y")
-                except:
-                    pass
-            
-            # Formato alternativo (15 Jan 2023)
-            elif len(fecha_texto.split()) == 3:
-                try:
-                    for fmt in ["%d %b %Y", "%d %B %Y"]:
-                        try:
-                            tweet_date = datetime.strptime(fecha_texto, fmt)
-                            break
-                        except:
-                            continue
-                except:
-                    pass
-            
-            # Si todavía no tenemos fecha, extraer números que parezcan año
-            if tweet_date is None:
-                import re
-                year_match = re.search(r'\b(20\d{2})\b', fecha_texto)
-                if year_match:
-                    year = int(year_match.group(1))
-                    # Si solo tenemos el año, verificar si está en el rango
-                    if start_date.year <= year <= end_date.year:
-                        return True
+            if "T" in fecha_texto:
+                # Manejar diferentes formatos ISO (con/sin Z, con/sin milisegundos)
+                iso_date = fecha_texto.replace("Z", "")
+                if "+" in iso_date:
+                    # Remover la parte de zona horaria
+                    iso_date = iso_date.split("+")[0]
                 
-        except:
-            # Si hay error, incluimos el tweet
+                # Parsear la fecha sin zona horaria
+                if "." in iso_date:  # Tiene milisegundos
+                    tweet_date = datetime.strptime(iso_date, "%Y-%m-%dT%H:%M:%S.%f")
+                else:
+                    tweet_date = datetime.strptime(iso_date, "%Y-%m-%dT%H:%M:%S")
+                
+                # Verificar si está en rango y logear el resultado
+                in_range = local_start_date <= tweet_date <= local_end_date
+                Logger.info(f"Tweet del {tweet_date.strftime('%Y-%m-%d')}: {'En rango' if in_range else 'Fuera de rango'}")
+                return in_range
+        except ValueError:
+            pass  # Si falla, probar otros formatos
+        
+        # 2. Verificar marcadores de tiempo relativos
+        relative_terms = ['hora', 'hour', 'min', 'segundo', 'second', 'hoy', 'today', 'ayer', 'yesterday']
+        if any(term in fecha_texto.lower() for term in relative_terms):
+            # Asumir que está en rango si es muy reciente
             return True
         
-        # Verificar si está en rango
-        if tweet_date:
-            return start_date <= tweet_date <= end_date
+        # 3. Buscar años específicos para filtrado rápido
+        if any(year not in fecha_texto for year in ['2025', '2024']):
+            return False  # Si no tiene 2025 ni 2024, probablemente es muy antiguo o formato desconocido
         
-        # Por defecto incluir
-        return True
+        if '2024' in fecha_texto and '2025' not in fecha_texto:
+            # Es de 2024, verificar mes si podemos
+            try:
+                # Intentar extraer mes para casos de frontera (diciembre 2024)
+                month_patterns = [
+                    r'([Ee]ne|[Jj]an).*2024',
+                    r'([Ff]eb).*2024',
+                    r'([Mm]ar).*2024',
+                    r'([Aa]br|[Aa]pr).*2024',
+                    r'([Mm]ay).*2024',
+                    r'([Jj]un).*2024',
+                    r'([Jj]ul).*2024',
+                    r'([Aa]go|[Aa]ug).*2024',
+                    r'([Ss]ep).*2024',
+                    r'([Oo]ct).*2024',
+                    r'([Nn]ov).*2024',
+                    r'([Dd]ic|[Dd]ec).*2024'
+                ]
+                
+                # Si es de diciembre 2024 y el rango incluye diciembre, incluirlo
+                if any(re.search(r'([Dd]ic|[Dd]ec).*2024', fecha_texto)) and local_start_date.month <= 12 and local_start_date.year <= 2024:
+                    return True
+                    
+                # Para el resto de 2024, excluir
+                return False
+            except:
+                return False  # Si no podemos determinar el mes, excluir por precaución
+        
+        # 4. Procesar formatos específicos si llegamos hasta aquí
+        month_map = {
+            'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12,
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        }
+        
+        # Patrones de fecha ordenados por probabilidad
+        date_patterns = [
+            r'(?P<day>\d{1,2})\s+de\s+(?P<month>[a-z]{3})\s+de\s+(?P<year>\d{4})',  # 22 de mar de 2025
+            r'(?P<month>[A-Za-z]{3})\s+(?P<day>\d{1,2}),\s+(?P<year>\d{4})',  # Mar 22, 2025
+            r'(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})',  # 2025-03-22
+            r'(?P<day>\d{1,2})\s+(?P<month>[a-z]{3})\s+(?P<year>\d{4})'  # 15 mar 2025
+        ]
+        
+        for pattern in date_patterns:
+            try:
+                match = re.search(pattern, fecha_texto, re.IGNORECASE)
+                if match:
+                    groups = match.groupdict()
+                    day = int(groups['day'])
+                    
+                    # Manejar mes (texto o número)
+                    month_str = groups.get('month', '')
+                    if month_str.isdigit():
+                        month = int(month_str)
+                    else:
+                        month = month_map.get(month_str.lower()[:3], 1)
+                    
+                    year = int(groups['year'])
+                    
+                    # Crear datetime y verificar rango
+                    tweet_date = datetime(year, month, day)
+                    in_range = local_start_date <= tweet_date <= local_end_date
+                    Logger.info(f"Tweet del {tweet_date.strftime('%Y-%m-%d')}: {'En rango' if in_range else 'Fuera de rango'}")
+                    return in_range
+            except (ValueError, KeyError):
+                continue  # Si falla con este patrón, probar siguiente
+        
+        # Si no pudimos determinar la fecha pero el texto tiene "2025", incluirlo
+        if "2025" in fecha_texto:
+            Logger.warning(f"No se pudo parsear precisamente, pero contiene '2025': {fecha_texto}")
+            return True
+        
+        # Si llegamos aquí, no pudimos determinar si está en rango
+        Logger.warning(f"No se pudo parsear la fecha: {fecha_texto}")
+        return False  # Por precaución, excluir
+
 
     def login(self):
         """
@@ -1484,438 +2725,6 @@ class TwitterScraper:
         except Exception as e:
             Logger.error(f"Error guardando datos en CSV: {e}")
             return None
-    
-    def get_updated_selectors():
-        return {
-            # Selectores actualizados para tweets
-            "tweets": [
-                "//div[@data-testid='cellInnerDiv']//article",
-                "//article[@data-testid='tweet']", 
-                "//div[@aria-label='Timeline: Tweets from people you follow']//article",
-                "//div[@aria-label='Timeline: Your Home Timeline']//article",
-                "//div[@aria-label='Timeline']//article",
-                "//section[@role='region']//div[@data-testid='cellInnerDiv']"
-            ],
-            
-            # Selectores actualizados para contenido de tweets
-            "tweet_content": [
-                ".//div[@data-testid='tweetText']",
-                ".//div[@lang and @dir='auto']", 
-                ".//div[starts-with(@class, 'css-')][@lang][@dir='auto']",
-                ".//div[@style and @lang and @dir='auto']"
-            ],
-            
-            # Selectores actualizados para fechas de tweets
-            "tweet_dates": [
-                ".//time",
-                ".//a[contains(@href, '/status/')]//time",
-                ".//span[contains(@class, 'css-')]/time"
-            ],
-            
-            # Selectores actualizados para métricas
-            "metrics": [
-                ".//div[@role='group']//span[@data-testid='app-text-transition-container']",
-                ".//span[contains(@class, 'css-')][@data-testid='app-text-transition-container']",
-                ".//div[contains(@aria-label, 'likes') or contains(@aria-label, 'replies') or contains(@aria-label, 'Retweets')]"
-            ],
-            
-            # Selectores actualizados para respuestas
-            "replies": [
-                ".//div[@data-testid='cellInnerDiv']//article",
-                ".//article[contains(@tabindex, '-1')]",
-                ".//div[@role='region']//article"
-            ],
-            
-            # Selectores actualizados para expandir respuestas
-            "expand_replies": [
-                ".//div[@role='button'][contains(text(), 'Show replies') or contains(text(), 'Mostrar respuestas')]",
-                ".//div[@role='button'][contains(text(), 'View more replies') or contains(text(), 'Ver más respuestas')]",
-                ".//div[@role='button'][contains(text(), 'Show more replies') or contains(text(), 'Mostrar más respuestas')]",
-                ".//div[@role='button' and @tabindex='0'][contains(text(), 'replies') or contains(text(), 'respuestas')]"
-            ],
-            
-            # Selectores actualizados para "Ver más" en tweets largos
-            "see_more": [
-                ".//div[@role='button'][contains(text(), 'Show more') or contains(text(), 'Mostrar más')]",
-                ".//span[contains(text(), 'Show more') or contains(text(), 'Mostrar más')]",
-                ".//div[@role='button' and @tabindex='0'][contains(text(), 'more') or contains(text(), 'más')]"
-            ]
-        }
-    
-    def optimized_tweet_extraction(self, username):
-        """
-        Versión mejorada para extraer tweets con manejo más directo del DOM
-        """
-        Logger.info("Iniciando extracción optimizada de tweets")
-        
-        tweets_data = []
-        tweets_processed = 0
-        
-        # 1. Intentar con la vista de búsqueda avanzada por fecha (más efectivo)
-        try:
-            # Formatear fechas para la URL de búsqueda avanzada
-            since_date = start_date.strftime("%Y-%m-%d")
-            until_date = end_date.strftime("%Y-%m-%d")
-            
-            # Construir URL de búsqueda avanzada con filtro de fechas
-            advanced_search_url = f"https://twitter.com/search?q=from%3A{username}%20since%3A{since_date}%20until%3A{until_date}&src=typed_query&f=live"
-            
-            Logger.info(f"Usando búsqueda avanzada con filtro de fechas: {since_date} hasta {until_date}")
-            self.driver.get(advanced_search_url)
-            self._human_delay(2, 3)
-        except Exception as e:
-            Logger.error(f"Error en búsqueda avanzada: {e}")
-            # Si falla, volver al timeline normal
-            self._navigate_to_user(username)
-        
-        # 2. Realizar scrolls iniciales para cargar contenido
-        self._scroll_with_pause(5, pause_every=2)
-        
-        # 3. Usar JavaScript directo para obtener los tweets (más robusto)
-        try:
-            tweets_found = 0
-            max_scroll_attempts = 20
-            
-            for attempt in range(max_scroll_attempts):
-                # Intentar obtener tweets con JavaScript
-                tweet_elements = self.driver.execute_script("""
-                    return Array.from(document.querySelectorAll('article[data-testid="tweet"], div[data-testid="cellInnerDiv"] > article')).filter(el => el.offsetParent !== null);
-                """)
-                
-                current_count = len(tweet_elements)
-                if current_count == tweets_found and attempt > 3:
-                    # No se encontraron nuevos tweets después de varios intentos
-                    Logger.info(f"No se encontraron nuevos tweets después de {attempt} intentos")
-                    break
-                    
-                tweets_found = current_count
-                Logger.info(f"Encontrados {tweets_found} tweets en pantalla (intento {attempt+1})")
-                
-                # Procesar tweets visibles
-                processed_in_batch = 0
-                for tweet_element in tweet_elements:
-                    try:
-                        # Verificar si ya procesamos este tweet
-                        tweet_id = self.driver.execute_script("""
-                            const el = arguments[0];
-                            const links = el.querySelectorAll('a[href*="/status/"]');
-                            for (const link of links) {
-                                const href = link.getAttribute('href');
-                                if (href && href.includes('/status/')) {
-                                    return href.split('/status/')[1].split('?')[0];
-                                }
-                            }
-                            return null;
-                        """, tweet_element)
-                        
-                        # Skip si no podemos obtener ID o ya lo procesamos
-                        if not tweet_id or any(t.get("tweet_id") == tweet_id for t in tweets_data):
-                            continue
-                            
-                        # Extraer datos del tweet con JavaScript (más confiable)
-                        tweet_data = self.extract_tweet_with_js(tweet_element, tweet_id)
-                        
-                        if tweet_data:
-                            tweets_data.append(tweet_data)
-                            tweets_processed += 1
-                            processed_in_batch += 1
-                            
-                            if tweets_processed % 5 == 0:
-                                Logger.success(f"Procesados {tweets_processed} tweets válidos")
-                                
-                            if tweets_processed >= MAX_TWEETS:
-                                Logger.info(f"Se alcanzó el límite de {MAX_TWEETS} tweets")
-                                return tweets_data
-                    except Exception as e:
-                        Logger.error(f"Error procesando tweet: {e}")
-                        continue
-                        
-                # Si no encontramos nuevos tweets en este batch, hacer más scroll
-                if processed_in_batch == 0:
-                    Logger.info("Haciendo scroll para cargar más tweets...")
-                    self.driver.execute_script("window.scrollBy(0, 800);")
-                    self._human_delay(1, 1.5)
-                
-                # Breve pausa para cargar contenido
-                time.sleep(1)
-                
-        except Exception as e:
-            Logger.error(f"Error en extracción optimizada: {e}")
-            
-        return tweets_data
-
-    def extract_tweet_with_js(self, tweet_element, tweet_id):
-        """
-        Extrae datos de un tweet usando JavaScript directo (más robusto)
-        """
-        try:
-            # Usar JavaScript para extracciones críticas
-            tweet_text = self.driver.execute_script("""
-                const el = arguments[0];
-                const textEl = el.querySelector('div[data-testid="tweetText"]');
-                return textEl ? textEl.innerText : "";
-            """, tweet_element) or "No disponible"
-            
-            tweet_url = self.driver.execute_script("""
-                const el = arguments[0];
-                const links = el.querySelectorAll('a[href*="/status/"]');
-                for (const link of links) {
-                    const href = link.getAttribute('href');
-                    if (href && href.includes('/status/')) {
-                        return 'https://twitter.com' + href;
-                    }
-                }
-                return "No disponible";
-            """, tweet_element)
-            
-            tweet_date = self.driver.execute_script("""
-                const el = arguments[0];
-                const timeEl = el.querySelector('time');
-                return timeEl ? (timeEl.getAttribute('datetime') || timeEl.innerText) : "";
-            """, tweet_element) or "No disponible"
-            
-            # Extraer métricas
-            metrics = {
-                "retweets": "0",
-                "likes": "0",
-                "replies": "0",
-                "views": "0"
-            }
-            
-            try:
-                metrics_js = self.driver.execute_script("""
-                    const el = arguments[0];
-                    const result = {};
-                    
-                    // Likes
-                    const likeEl = el.querySelector('div[data-testid="like"]');
-                    if (likeEl) {
-                        const counter = likeEl.querySelector('[data-testid="app-text-transition-container"]');
-                        result.likes = counter ? counter.innerText : "0";
-                    }
-                    
-                    // Retweets
-                    const retweetEl = el.querySelector('div[data-testid="retweet"]');
-                    if (retweetEl) {
-                        const counter = retweetEl.querySelector('[data-testid="app-text-transition-container"]');
-                        result.retweets = counter ? counter.innerText : "0";
-                    }
-                    
-                    // Replies
-                    const replyEl = el.querySelector('div[data-testid="reply"]');
-                    if (replyEl) {
-                        const counter = replyEl.querySelector('[data-testid="app-text-transition-container"]');
-                        result.replies = counter ? counter.innerText : "0";
-                    }
-                    
-                    // Views (si están disponibles)
-                    const analyticsEl = el.querySelector('a[href*="analytics"]');
-                    if (analyticsEl) {
-                        const counter = analyticsEl.querySelector('[data-testid="app-text-transition-container"]');
-                        result.views = counter ? counter.innerText : "0";
-                    }
-                    
-                    return result;
-                """, tweet_element)
-                
-                if metrics_js:
-                    metrics.update(metrics_js)
-            except:
-                pass
-            
-            # Extraer usuario y handle
-            user_info = self.driver.execute_script("""
-                const el = arguments[0];
-                const result = {username: "", handle: ""};
-                
-                // Intento 1: Buscar en User-Name
-                const nameEl = el.querySelector('div[data-testid="User-Name"]');
-                if (nameEl) {
-                    const nameParts = nameEl.querySelectorAll('span, a');
-                    if (nameParts.length > 0) {
-                        result.username = nameParts[0].innerText.trim();
-                        for (const part of nameParts) {
-                            const text = part.innerText;
-                            if (text && text.includes('@')) {
-                                result.handle = text.trim();
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                // Intento 2: Obtener de altre forma si no tenemos username
-                if (!result.username) {
-                    const userLink = el.querySelector('a[role="link"][tabindex="-1"]');
-                    if (userLink) {
-                        const img = userLink.querySelector('img');
-                        if (img && img.getAttribute('alt')) {
-                            result.username = img.getAttribute('alt');
-                        }
-                        
-                        // Intenta obtener el handle desde la URL
-                        const href = userLink.getAttribute('href');
-                        if (href && href.startsWith('/')) {
-                            const possibleHandle = href.split('/')[1];
-                            if (possibleHandle && !possibleHandle.includes('/')) {
-                                result.handle = '@' + possibleHandle;
-                            }
-                        }
-                    }
-                }
-                
-                return result;
-            """, tweet_element)
-            
-            username = user_info.get('username', 'Usuario desconocido') if user_info else 'Usuario desconocido'
-            user_handle = user_info.get('handle', '@desconocido') if user_info else '@desconocido'
-            
-            # Verificar si hay medios (fotos/videos)
-            media_info = self.driver.execute_script("""
-                const el = arguments[0];
-                const result = {hasMedia: false, count: 0};
-                
-                // Buscar fotos
-                const photos = el.querySelectorAll('div[data-testid="tweetPhoto"]');
-                if (photos.length > 0) {
-                    result.hasMedia = true;
-                    result.count += photos.length;
-                }
-                
-                // Buscar videos
-                const videos = el.querySelectorAll('div[data-testid="videoComponent"], div[data-testid="videoPlayer"]');
-                if (videos.length > 0) {
-                    result.hasMedia = true;
-                    result.count += videos.length;
-                }
-                
-                return result;
-            """, tweet_element)
-            
-            # Construir el diccionario de datos del tweet
-            tweet_data = {
-                "tweet_id": tweet_id,
-                "url_tweet": tweet_url,
-                "usuario": username,
-                "handle": user_handle,
-                "texto_tweet": tweet_text,
-                "fecha_tweet": tweet_date,
-                "retweets": metrics["retweets"],
-                "likes": metrics["likes"],
-                "respuestas_count": metrics["replies"],
-                "vistas": metrics["views"],
-                "respuestas": {}
-            }
-            
-            # Añadir información de medios si existen
-            if media_info and media_info.get('hasMedia', False):
-                tweet_data["tiene_media"] = True
-                tweet_data["cantidad_media"] = media_info.get('count', 0)
-            
-            return tweet_data
-            
-        except Exception as e:
-            Logger.error(f"Error extrayendo datos con JS: {e}")
-            return None
-    
-    def print_element_details(self, element, label="Elemento"):
-        """
-        Imprime detalles útiles de un elemento para debugging
-        """
-        try:
-            tag_name = element.tag_name
-            element_id = element.get_attribute("id") or "sin id"
-            classes = element.get_attribute("class") or "sin clases"
-            is_displayed = element.is_displayed()
-            text = element.text or "sin texto"
-            
-            print(f"\n----- {label} DETALLES -----")
-            print(f"Tag: {tag_name}")
-            print(f"ID: {element_id}")
-            print(f"Clases: {classes}")
-            print(f"Visible: {is_displayed}")
-            print(f"Texto: {text[:50]}{'...' if len(text) > 50 else ''}")
-            print("--------------------------\n")
-        except:
-            print(f"Error al imprimir detalles del elemento {label}")
-
-    def detect_timeline_scrolling_issues(self):
-        """
-        Detecta problemas comunes de scrolling en el timeline
-        """
-        try:
-            # Verificar si hay elementos bloqueando el scroll
-            blocking_elements = self.driver.execute_script("""
-                // Elementos que podrían bloquear el scroll
-                const modals = document.querySelectorAll('div[role="dialog"], [aria-modal="true"]');
-                const fixedHeaders = document.querySelectorAll('div[data-testid="primaryColumn"] > div > div[style*="position: sticky"]');
-                const visibleModals = Array.from(modals).filter(el => el.offsetParent !== null);
-                const stickyElements = Array.from(fixedHeaders).filter(el => el.offsetParent !== null);
-                
-                return {
-                    visibleModals: visibleModals.length,
-                    stickyHeaders: stickyElements.length,
-                    windowHeight: window.innerHeight,
-                    documentHeight: document.body.scrollHeight,
-                    scrollY: window.scrollY
-                };
-            """)
-            
-            Logger.info(f"Diagnóstico de scroll: {blocking_elements}")
-            
-            # Verificar si estamos en el fondo de la página
-            if blocking_elements.get('scrollY', 0) + blocking_elements.get('windowHeight', 0) >= blocking_elements.get('documentHeight', 0) - 200:
-                Logger.warning("Se detectó que estamos cerca del final de la página")
-                return True
-                
-            # Verificar si hay modales visibles
-            if blocking_elements.get('visibleModals', 0) > 0:
-                Logger.warning("Se detectaron modales visibles que podrían bloquear el scroll")
-                
-                # Intentar cerrar modales
-                self.driver.execute_script("""
-                    document.querySelectorAll('div[role="dialog"] [aria-label="Close"], [aria-modal="true"] [aria-label="Close"]').forEach(btn => {
-                        if (btn.offsetParent !== null) btn.click();
-                    });
-                """)
-                return True
-                
-            return False
-        except Exception as e:
-            Logger.error(f"Error en detección de problemas de scrolling: {e}")
-            return False
-
-    # =========================================================================
-    # MEJORAS PARA BUSCAR TWEETS EN UN RANGO DE FECHAS ESPECÍFICO
-    # =========================================================================
-
-    def search_tweets_by_date_range(self, username):
-        """
-        Usa la búsqueda avanzada de Twitter para encontrar tweets en un rango de fechas
-        """
-        try:
-            # Formatear fechas para la URL
-            since_date = start_date.strftime("%Y-%m-%d")
-            until_date = end_date.strftime("%Y-%m-%d")
-            
-            # Construir URL con filtros de fecha
-            search_url = f"https://twitter.com/search?q=from%3A{username}%20since%3A{since_date}%20until%3A{until_date}&src=typed_query&f=live"
-            
-            Logger.info(f"Buscando tweets por rango de fechas: {since_date} hasta {until_date}")
-            self.driver.get(search_url)
-            self._human_delay(2, 3)
-            
-            # Verificar si estamos en la página de resultados
-            current_url = self.driver.current_url.lower()
-            if "search" in current_url and f"from%3a{username.lower()}" in current_url.replace(" ", ""):
-                Logger.success(f"Búsqueda por fechas activada correctamente")
-                return True
-            else:
-                Logger.warning(f"La búsqueda por fechas no se activó correctamente. URL actual: {current_url}")
-                return False
-        except Exception as e:
-            Logger.error(f"Error en búsqueda por fechas: {e}")
-            return False
 
 # =========================================================================
 # MAIN
