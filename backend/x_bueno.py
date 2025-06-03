@@ -25,7 +25,7 @@ sys.path.append(ruta_raiz)
 
 # Intentar importar módulos propios
 try:
-    from modules.agents import agents
+    from agents import agents
 except ImportError:
     pass  # Silenciar error si no existe
 
@@ -54,19 +54,19 @@ X_PASS = "Sidoresilasisoln777"
 
 # Lista de usuarios a extraer
 USERS = [
-    "plata_card"  # Reemplaza con el usuario que quieras extraer
+    "cabify gana juicio a la comunidad de madrid"  # Reemplaza con el usuario que quieras extraer
 ]
-USER = "plata_card"
+USER = "Cabify gana juicio a la comunidad de madrid"  
 
 # Filtros avanzados
-START_DATE = "01-01-2025"  # Formato DD-MM-YYYY, tweets a partir de esta fecha
-END_DATE = "15-04-2025"    # Formato DD-MM-YYYY, tweets hasta esta fecha
-MAX_TWEETS = 500           # Número máximo de tweets a extraer
-NUM_SCROLLS = 30           # Reducido para optimizar
+START_DATE = "01-02-2024"  # Formato DD-MM-YYYY, tweets a partir de esta fecha
+END_DATE = "26-05-2025"    # Formato DD-MM-YYYY, tweets hasta esta fecha
+MAX_TWEETS = 15           # Número máximo de tweets a extraer
+NUM_SCROLLS = 15           # Reducido para optimizar
 SAVE_SCREENSHOTS = False   # Desactivado por defecto para mejorar velocidad
 BROWSER_TYPE = 'Chrome'    # Tipo de navegador: 'Chrome' únicamente para uc
 ENABLE_HEADLESS = True    # Activar modo headless (sin interfaz gráfica)
-MAX_RETRIES = 3            # Número máximo de reintentos para operaciones que pueden fallar
+MAX_RETRIES = 4            # Número máximo de reintentos para operaciones que pueden fallar
 LOAD_REPLIES = True        # Establece a False para una extracción super rápida sin respuestas
 
 # Optimización de tiempos
@@ -270,7 +270,7 @@ class TwitterScraper:
         Logger.info("Iniciando fase de pre-carga de tweets antiguos...")
         
         # Variables para la pre-carga
-        scroll_total = 60  # Número total de scrolls para pre-carga
+        scroll_total = 30  # Número total de scrolls para pre-carga
         wait_multiplier = 1.0  # Factor de multiplicación de tiempo de espera
         last_height = self.driver.execute_script("return document.body.scrollHeight")
         consecutive_same_height = 0
@@ -351,7 +351,7 @@ class TwitterScraper:
         
         # Variables para la extracción
         processed_urls = set()  # Para evitar procesar tweets duplicados
-        extraction_scrolls = 200  # Número extendido de scrolls para la extracción
+        extraction_scrolls = 60  # Número extendido de scrolls para la extracción
         continuous_empty_scrolls = 0  # Contador de scrolls consecutivos sin tweets
         
         # Ahora scrollear de forma más lenta y metódica para extraer todos los tweets
@@ -1151,15 +1151,19 @@ class TwitterScraper:
             
     def _setup_driver(self):
         options = uc.ChromeOptions()
+        #options.headless = True
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         
+        # Especificar manualmente la ubicación del binario de Chrome en macOS
+        #options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        #chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         try:
             driver = uc.Chrome(
                 service=Service(ChromeDriverManager().install()),
                 options=options,
-                version_main=134
+                version_main=136
             )
             return driver
         except Exception as e:

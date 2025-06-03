@@ -16,8 +16,8 @@ import json
 
 # Configuración
 DATE_FILTER = "last_3_months"
-MAX_VIDEOS_TO_CHECK = 100
-VIDEOS_TO_SCRAPE = 50
+MAX_VIDEOS_TO_CHECK = 60
+VIDEOS_TO_SCRAPE = 10
 MAX_RETRIES = 2
 SCROLL_ATTEMPTS = 1
 PAUSE_EVERY = 3
@@ -30,8 +30,8 @@ agents = [
 
 # Canales
 channels = [
-    "https://www.youtube.com/@platacard/videos",
-    #"https://www.youtube.com/@klar_mx/videos",
+    "https://www.youtube.com/results?search_query=manifestacion+de+taxis+espa%C3%B1a+vtc+2025",
+    #"https://www.youtube.com/results?search_query=feria+de+san+isidro+madrid+2025&sp=CAI%253D",
     #"https://www.youtube.com/@numexico/videos",
     #"https://www.youtube.com/@MercadoPago/videos",
     #"https://www.youtube.com/@stori_mx/videos",
@@ -426,7 +426,7 @@ class YouTubeScraper:
             return False
             
         if DATE_FILTER == "last_3_months":
-            five_months_ago = datetime.now() - timedelta(days=85)
+            five_months_ago = datetime.now() - timedelta(days=28)
             return date_obj >= five_months_ago
             
         elif DATE_FILTER == "2024":
@@ -443,6 +443,7 @@ def process_channel_modified(channel_url, service):
     
     chrome_options = Options()
     #chrome_options.add_argument("--headless=new")
+    #chrome_options.add_argument("--mute-audio")
     chrome_options.add_argument(f"user-agent={random.choice(agents)}")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
